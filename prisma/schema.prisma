@@ -52,25 +52,25 @@ model ProductShop {
   @@id([productId, shopId]) // Composite primary key
 }
 
-model Notification {
-  id String @id @default(uuid())
-  type String
-  message String
-  product Product @relation(fields: [productId], references: [id])
-  productId String
-  isRead Boolean @default(false)
-  createdAt DateTime @default(now())
+model Bucket {
+  id     String        @id @default(uuid())
+  user   User          @relation(fields: [userId], references: [id])
+  userId String        @unique
+  items  BucketItem[]
 }
 
+model BucketItem {
+  id         String     @id @default(uuid())
+  bucket     Bucket     @relation(fields: [bucketId], references: [id])
+  bucketId   String
 
-model stockHistory {
-  id String @id @default(uuid())
-  productId String
-  changeType String // e.g., "IN", "OUT"
-  oldQuantity Int
-  newQuantity Int
-  actionedBy String // User or system that made the change
-  action String // Description of the action taken
-  product Product @relation(fields: [productId], references: [id])
-  actionedAt DateTime @default(now())
+  product    Product    @relation(fields: [productId], references: [id])
+  productId  String
+
+  shop       Shop       @relation(fields: [shopId], references: [id])
+  shopId     String
+
+  quantity   Int        @default(1)
+
+  @@unique([bucketId, productId, shopId]) // Each product-shop pair only once per bucket
 }
