@@ -10,7 +10,7 @@ import shopRoutes from "./routes/shop.routes.js"
 const app = express();
 // Load environment variables
 dotenv.config();
-connectDB(); // Connect to MongoDB
+
 const PORT = process.env.PORT;
 app.use(express.json()); // Middleware to parse JSON bodies
 
