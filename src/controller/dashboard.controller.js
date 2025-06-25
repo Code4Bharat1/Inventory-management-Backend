@@ -1,15 +1,25 @@
-import Product from '../models/product.model.js';
+import Prisma from "../config/db.conf.js"
 
 export const getInventoryDashboardSummary = async (req, res) => {
   try {
     // 1. Total products
-    const totalProducts = await Product.countDocuments();
+    const totalProducts = await Prisma.product.count();
 
     // 2. Out of stock products
-    const outOfStockProducts = await Product.countDocuments({ quantity: 0 });
+    const outOfStockProducts = await Prisma.product.count({
+      where:{
+        quantity : 0
+      }
+    })
 
     // 3. Low stock products
-    const lowStockProducts = await Product.countDocuments({ $expr: { $lt: ["$quantity", "$minimumStock"] } });
+    const lowStockProducts = await Prisma.product.count({
+      where:{
+        quantity: {
+          lt: Prisma.product.fields.minimumStock 
+        }
+      }
+    })
 
     // 4. Pending orders (optional)
     // Uncomment and update if you have Order model & pending status

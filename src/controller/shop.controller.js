@@ -1,7 +1,7 @@
-import Shop from '../models/shop.model.js';
-import Product from '../models/product.model.js';
-
-import slugify from 'slugify';
+import Shop from "../models/shop.model.js";
+import Product from "../models/product.model.js";
+import Prisma from "../config/db.conf.js";
+import slugify from "slugify";
 
 //create shop
 export const createShop = async (req, res) => {
@@ -15,27 +15,29 @@ export const createShop = async (req, res) => {
     let baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let count = 1;
-    while (await Shop.findOne({ slug })) {
+    while (await Prisma.shop.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${count}`;
       count++;
     }
 
-    const shop = await Shop.create({
-      name: name.trim(),
-      description: description?.trim(),
-      logoUrl: logoUrl?.trim(),
-      slug,
-    //   owner
+    const shop = await Prisma.shop.create({
+      data: {
+        name,
+        description,
+        logoUrl,
+        slug, // Use the generated slug
+        // owner, // Uncomment if you have user authentication
+      },
     });
 
     // Use BASE_URL from environment or default to localhost for dev
-    const baseUrl = process.env.BASE_URL ;
+    const baseUrl = process.env.BASE_URL;
     const shopUrl = `${baseUrl}/shops/${slug}`;
 
     res.status(201).json({
-      message: 'Shop created successfully!',
+      message: "Shop created successfully!",
       shop,
-      shopUrl
+      shopUrl,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -48,7 +50,14 @@ export const assignProductsToShops = async (req, res) => {
     const { productIds, shopIds } = req.body; // Arrays
 
     // Check all shops exist and owned by user
-    const shops = await Shop.find({ _id: { $in: shopIds } });
+
+    const shops = await prisma.shop.findMany({
+      where: {
+        id: {
+          in: shopIds,
+        },
+      },
+    });
     if (shops.length !== shopIds.length)
       return res.status(404).json({ error: "One or more shops not found." });
 
@@ -63,14 +72,16 @@ export const assignProductsToShops = async (req, res) => {
     const products = await Product.find({ _id: { $in: productIds } });
     for (let product of products) {
       // Add shopIds to the 'shops' array, avoiding duplicates
-      const uniqueShopIds = Array.from(new Set([...(product.shops || []), ...shopIds]));
+      const uniqueShopIds = Array.from(
+        new Set([...(product.shops || []), ...shopIds])
+      );
       product.shops = uniqueShopIds;
       await product.save();
     }
 
     res.json({
       message: "Products assigned to shops successfully.",
-      updatedProducts: products.length
+      updatedProducts: products.length,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

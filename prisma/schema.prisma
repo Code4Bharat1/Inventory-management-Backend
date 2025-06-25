@@ -23,7 +23,9 @@ model Product {
   imageUrl      String?
   note          String?
   minimumStock  Int?          @default(0)
+  notification Notification[]
   shopRelations ProductShop[] // Relation to explicit table
+  stockHistory  stockHistory[] // Relation to stock history
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -31,6 +33,8 @@ model Product {
 model Shop {
   id               String        @id @default(uuid())
   name             String        @unique
+  description      String?
+  logoUrl           String?
   slug             String        @unique
   isActive         Boolean       @default(true)
   productRelations ProductShop[] // Relation to explicit table
@@ -46,4 +50,27 @@ model ProductShop {
   stockInShop Int     @default(0) // Additional field
 
   @@id([productId, shopId]) // Composite primary key
+}
+
+model Notification {
+  id String @id @default(uuid())
+  type String
+  message String
+  product Product @relation(fields: [productId], references: [id])
+  productId String
+  isRead Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+
+model stockHistory {
+  id String @id @default(uuid())
+  productId String
+  changeType String // e.g., "IN", "OUT"
+  oldQuantity Int
+  newQuantity Int
+  actionedBy String // User or system that made the change
+  action String // Description of the action taken
+  product Product @relation(fields: [productId], references: [id])
+  actionedAt DateTime @default(now())
 }

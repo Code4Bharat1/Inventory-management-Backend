@@ -1,4 +1,3 @@
-import Product from "../models/product.model.js";
 import Prisma from "../config/db.conf.js";
 import { createLowStockNotification } from "../services/notificationService.js";
 import { logStockHistory } from "../services/stockHistoryService.js";
