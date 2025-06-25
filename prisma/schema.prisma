@@ -47,3 +47,26 @@ model ProductShop {
 
   @@id([productId, shopId]) // Composite primary key
 }
+
+model Bucket {
+  id     String        @id @default(uuid())
+  user   User          @relation(fields: [userId], references: [id])
+  userId String        @unique
+  items  BucketItem[]
+}
+
+model BucketItem {
+  id         String     @id @default(uuid())
+  bucket     Bucket     @relation(fields: [bucketId], references: [id])
+  bucketId   String
+
+  product    Product    @relation(fields: [productId], references: [id])
+  productId  String
+
+  shop       Shop       @relation(fields: [shopId], references: [id])
+  shopId     String
+
+  quantity   Int        @default(1)
+
+  @@unique([bucketId, productId, shopId]) // Each product-shop pair only once per bucket
+}
