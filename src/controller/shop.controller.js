@@ -93,12 +93,15 @@ export const assignProductsToShops = async (req, res) => {
 export const addItemsToBucket = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { shopId, productIds } = req.body;
+    const { shopId, items } = req.body; // ✅ changed from productIds to items
 
     // Validate required inputs
-    if (!shopId || !Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ error: 'shopId and productIds (array) are required.' });
+    if (!shopId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'shopId and items (array of {productId, quantity}) are required.' }); // ✅ updated validation
     }
+
+    // ✅ Extract productIds from items
+    const productIds = items.map(i => i.productId); // ✅ used for lookup and validation
 
     // Confirm the shop exists
     const shop = await prisma.shop.findUnique({ where: { id: shopId } });
@@ -106,7 +109,7 @@ export const addItemsToBucket = async (req, res) => {
 
     // Confirm all requested products exist
     const products = await prisma.product.findMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: productIds } }, // ✅ used extracted productIds
     });
     if (products.length !== productIds.length) {
       return res.status(404).json({ error: 'One or more products not found.' });
@@ -120,8 +123,13 @@ export const addItemsToBucket = async (req, res) => {
 
     let addedCount = 0;
 
-    // Loop through each product
-    for (const product of products) {
+    for (const item of items) {
+      const { productId, quantity } = item;
+      if (quantity <= 0) continue; // ✅ skip invalid quantity
+
+      const product = products.find(p => p.id === productId);
+      if (!product) continue;
+
       const uniqueKey = {
         bucketId_productId_shopId: {
           bucketId: bucket.id,
@@ -138,7 +146,7 @@ export const addItemsToBucket = async (req, res) => {
         await prisma.bucketItem.update({
           where: { id: existingItem.id },
           data: {
-            quantity: existingItem.quantity + 1,
+            quantity: existingItem.quantity + quantity, // ✅ increase by given quantity
           },
         });
       } else {
@@ -148,7 +156,7 @@ export const addItemsToBucket = async (req, res) => {
             bucketId: bucket.id,
             productId: product.id,
             shopId,
-            quantity: 1,
+            quantity, // ✅ set initial quantity
           },
         });
       }
@@ -165,35 +173,66 @@ export const addItemsToBucket = async (req, res) => {
   }
 };
 
+
 // Remove selected products (from a specific shop) from the user's bucket
 export const removeItemsFromBucket = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { shopId, productIds } = req.body;
+    const { shopId, items } = req.body; // ✅ changed from productIds to items
 
     // Validate required inputs
-    if (!shopId || !Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ error: 'shopId and productIds (array) are required.' });
+    if (!shopId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'shopId and items (array of {productId, quantity}) are required.' }); // ✅ updated validation
     }
+
+    // ✅ Extract productIds from items
+    const productIds = items.map(i => i.productId); // ✅ used if needed for validation or debug
 
     // Get user's bucket
     const bucket = await prisma.bucket.findUnique({ where: { userId } });
     if (!bucket) return res.status(404).json({ error: 'Bucket not found.' });
 
-    // Delete all matching product+shop entries from the bucket
-    const deleteResult = await prisma.bucketItem.deleteMany({
-      where: {
-        bucketId: bucket.id,
-        shopId,
-        productId: { in: productIds },
-      },
-    });
+    let modifiedCount = 0;
+
+    for (const item of items) {
+      const { productId, quantity } = item;
+      if (quantity <= 0) continue; // ✅ skip invalid quantity
+
+      const uniqueKey = {
+        bucketId_productId_shopId: {
+          bucketId: bucket.id,
+          productId,
+          shopId,
+        },
+      };
+
+      // Find the item
+      const existingItem = await prisma.bucketItem.findUnique({ where: uniqueKey });
+
+      if (existingItem) {
+        if (existingItem.quantity > quantity) {
+          // ✅ reduce quantity
+          await prisma.bucketItem.update({
+            where: { id: existingItem.id },
+            data: {
+              quantity: existingItem.quantity - quantity,
+            },
+          });
+        } else {
+          // ✅ delete if quantity is now 0 or less
+          await prisma.bucketItem.delete({ where: { id: existingItem.id } });
+        }
+
+        modifiedCount++;
+      }
+    }
 
     res.status(200).json({
-      message: `${deleteResult.count} product(s) removed from your bucket.`,
+      message: `${modifiedCount} product(s) removed from your bucket.`,
     });
   } catch (error) {
     console.error('Error in removeItemsFromBucket:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
