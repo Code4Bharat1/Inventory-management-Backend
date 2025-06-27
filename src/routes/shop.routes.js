@@ -11,6 +11,7 @@ import {
   addItemsToBucket,
   removeItemsFromBucket,
   getBucketItems,
+  createOrder,
 } from "../controller/shop.controller.js";
 import { authenticateJWT } from "../middleware/auth.middleware.js";
 const router = express.Router();
@@ -36,5 +37,6 @@ router.delete(
   removeItemsFromBucket
 );
 router.get("/:slug/:categoryId/bucket", authenticateJWT, getBucketItems);
+router.post("/:slug/:categoryId/order", authenticateJWT, createOrder);
 
 export default router;

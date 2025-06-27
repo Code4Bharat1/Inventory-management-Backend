@@ -772,7 +772,7 @@ export const removeItemsFromBucket = async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
-
+//get all bucket item
 export const getBucketItems = async (req, res) => {
   try {
     const userId = req.user.userId; // Get userId from authenticated user
@@ -828,6 +828,148 @@ export const getBucketItems = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getBucketItems:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+
+//create order
+export const createOrder = async (req, res) => {
+  try {
+    const userId = req.user.userId; // Get userId from authenticated user
+
+    // Find the user's bucket with items
+    const bucket = await Prisma.bucket.findUnique({
+      where: { userId },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                quantity: true,
+              },
+            },
+            shop: {
+              select: {
+                id: true,
+                name: true,
+                ownerId: true, // Assuming shop has an ownerId field for notifications
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Validate bucket existence and items
+    if (!bucket || bucket.items.length === 0) {
+      return res.status(400).json({ error: "Bucket is empty or does not exist." });
+    }
+
+    // Group items by shop to handle multiple shops if needed
+    const itemsByShop = bucket.items.reduce((acc, item) => {
+      const shopId = item.shop.id;
+      if (!acc[shopId]) {
+        acc[shopId] = {
+          shop: item.shop,
+          items: [],
+        };
+      }
+      acc[shopId].items.push({
+        productId: item.product.id,
+        productName: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+      });
+      return acc;
+    }, {});
+
+    // Validate stock availability
+    for (const shopId in itemsByShop) {
+      const { items } = itemsByShop[shopId];
+      for (const item of items) {
+        const product = bucket.items.find((i) => i.product.id === item.productId).product;
+        if (product.quantity < item.quantity) {
+          return res.status(400).json({
+            error: `Insufficient stock for product ${item.productName}. Available: ${product.quantity}, Requested: ${item.quantity}`,
+          });
+        }
+      }
+    }
+
+    // Create orders and update stock
+    const orders = [];
+    for (const shopId in itemsByShop) {
+      const { items, shop } = itemsByShop[shopId];
+      const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+      // Create order for the shop
+      const order = await Prisma.order.create({
+        data: {
+          userId,
+          shopId,
+          totalAmount,
+          status: "PENDING", // Initial status
+          orderItems: {
+            create: items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          },
+        },
+        include: {
+          orderItems: true,
+        },
+      });
+
+      orders.push(order);
+
+      // Update product stock
+      for (const item of items) {
+        await Prisma.product.update({
+          where: { id: item.productId },
+          data: { quantity: { decrement: item.quantity } },
+        });
+      }
+
+      // Send notification to shop owner (mocked)
+      // In a real app, this could use email (e.g., Nodemailer), push notifications, or an external service
+      const notification = {
+        shopOwnerId: shop.ownerId,
+        message: `New order received (Order ID: ${order.id}) from user ${userId} for ${items.length} item(s) totaling $${totalAmount.toFixed(2)}.`,
+        createdAt: new Date(),
+      };
+      // Mock: Log notification (replace with actual notification logic, e.g., save to a Notification table or send email)
+      console.log("Notification sent to shop owner:", notification);
+      // Example: await sendEmail(shop.ownerEmail, "New Order", notification.message);
+    }
+
+    // Clear the user's bucket
+    await Prisma.bucketItem.deleteMany({
+      where: { bucketId: bucket.id },
+    });
+
+    res.status(201).json({
+      message: `Order(s) created successfully. ${orders.length} shop(s) notified.`,
+      orders: orders.map((order) => ({
+        orderId: order.id,
+        shopId: order.shopId,
+        shopName: itemsByShop[order.shopId].shop.name,
+        totalAmount: order.totalAmount,
+        items: order.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        status: order.status,
+      })),
+    });
+  } catch (error) {
+    console.error("Error in createOrder:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };

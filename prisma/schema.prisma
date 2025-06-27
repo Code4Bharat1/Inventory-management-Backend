@@ -24,9 +24,10 @@ model User {
   createdAt DateTime @default(now()) // Timestamp for user creation
   updatedAt DateTime @updatedAt // Timestamp for last update
   bucket    Bucket?  // One-to-one relation with Bucket
-  // orders    Order[]  // One-to-many relation with Orders
+  orders    Order[]  // One-to-many relation with Orders
   // shops     Shop[]   @relation("ShopOwner") // Optional: Many-to-many with Shop if user can own shops
 }
+
 
 model Product {
   id            String        @id @default(uuid())
@@ -42,6 +43,7 @@ model Product {
   shopCategoriesProducts ProductCategory[] // Relation to explicit table
   stockHistory  stockHistory[] // Relation to stock history
   bucketItems  BucketItem[] // Relation to bucket items
+  orderItems   OrderItem[] //relation to order items
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -53,10 +55,12 @@ model Shop {
   description      String?
   logoUrl           String?
   slug             String        @unique
+  ownerId          String?
   isActive         Boolean       @default(true)
   categories       Category[]    // Relation to categories
   categoryRelations ProductCategory[] // Relation to explicit table
   butketItems      BucketItem[] // Relation to bucket items
+  order            Order[] // realtion to order
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 }
@@ -129,4 +133,26 @@ model ProductCategory {
   shop          Shop            @relation(fields: [shopId], references: [id])
   category      Category        @relation(fields: [categoryId], references: [id])
   @@id([productId, shopId, categoryId])
+}
+
+model Order {
+  id          String       @id @default(uuid())
+  userId      String
+  shopId      String
+  totalAmount Float
+  status      String
+  user        User         @relation(fields: [userId], references: [id])
+  shop        Shop         @relation(fields: [shopId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime     @default(now())
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 }
