@@ -1,6 +1,5 @@
 import Prisma from "../config/db.conf.js";
 import { createLowStockNotification } from "../services/notificationService.js";
-import { logStockHistory } from "../services/stockHistoryService.js";
 
 export const createProduct = async (req, res) => {
   try {

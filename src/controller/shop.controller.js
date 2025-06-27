@@ -1,5 +1,4 @@
-import Shop from "../models/shop.model.js";
-import Product from "../models/product.model.js";
+
 import Prisma from "../config/db.conf.js";
 import slugify from "slugify";
 

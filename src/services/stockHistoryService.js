@@ -1,6 +1,5 @@
 // services/stockHistoryService.js
-import StockHistory from '../models/stockhistory.model.js';
-
+import Prisma from "../config/db.conf.js";
 export const logStockHistory = async ({
   product,
   oldQuantity,
@@ -19,7 +18,7 @@ export const logStockHistory = async ({
  *  - System-driven quantity updates (sale, restock, return, etc.) — in those cases, set 'action' and 'note' programmatically
  **/
 }) => {
-  await StockHistory.create({
+  await Prisma.stockHistory.create({
     product,
     oldQuantity,
     newQuantity,

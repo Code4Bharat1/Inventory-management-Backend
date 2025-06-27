@@ -90,6 +90,7 @@ model Notification{
   productId   String
   product     Product  @relation(fields: [productId], references: [id])
   message     String
+  type        String
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
