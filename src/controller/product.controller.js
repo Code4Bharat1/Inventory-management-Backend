@@ -102,8 +102,8 @@ export const getProducts = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const product = await Prisma.product.findUnique({
-      where:{id:req.params.id},
-    })
+      where: { id: req.params.id },
+    });
     if (!product) return res.status(404).json({ error: "Product not found" });
     res.json(product);
   } catch (error) {
@@ -116,11 +116,11 @@ export const updateProduct = async (req, res) => {
   try {
     const product = await Prisma.product.update({
       where: { id: req.params.id },
-      data:{
+      data: {
         ...req.body, // Spread operator to update all fields
         updatedAt: new Date(), // Update timestamp
-      }
-    })
+      },
+    });
     if (!product) return res.status(404).json({ error: "Product not found" });
     res.json(product);
   } catch (error) {
@@ -133,7 +133,7 @@ export const deleteProduct = async (req, res) => {
   try {
     const product = await Prisma.product.delete({
       where: { id: req.params.id },
-    })
+    });
     if (!product) return res.status(404).json({ error: "Product not found" });
     res.json({ message: "Product deleted" });
   } catch (error) {
@@ -154,7 +154,9 @@ export const updateProductQuantity = async (req, res) => {
   }
 
   try {
-    const product = await Product.findById(id);
+    const product = await Prisma.product.findUnique({
+      where: { id },
+    });
     if (!product) return res.status(404).json({ error: "Product not found." });
 
     // Store old quantity before updating
@@ -170,13 +172,14 @@ export const updateProductQuantity = async (req, res) => {
     }
 
     // Log stock history
-    await logStockHistory({
-      product: product._id,
-      oldQuantity,
-      newQuantity: quantity,
-      action: action || "manual update",
-      user: req.user?._id, // If you have authentication
-      note: note || "",
+    await Prisma.stockHistory.create({
+      data: {
+        productId: product.id,
+        oldQuantity,
+        newQuantity: product.quantity,
+        changeType: action || "manual_update", // Default to manual update if no action provided
+        note: note || "", // Use provided note or empty string
+      },
     });
 
     res.json({

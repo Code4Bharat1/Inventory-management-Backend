@@ -13,6 +13,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String   @id @default(uuid()) // Unique identifier for the user
+  email     String   @unique // Email for login, must be unique
+  password  String   // Hashed password for authentication
+  name      String   // User's full name
+  phone     String?  // Optional phone number for contact
+  address   String?  // Optional address for shipping
+  role      String   @default("customer") // Role: 'customer' or 'shop_owner'
+  createdAt DateTime @default(now()) // Timestamp for user creation
+  updatedAt DateTime @updatedAt // Timestamp for last update
+  bucket    Bucket?  // One-to-one relation with Bucket
+  // orders    Order[]  // One-to-many relation with Orders
+  // shops     Shop[]   @relation("ShopOwner") // Optional: Many-to-many with Shop if user can own shops
+}
+
 model Product {
   id            String        @id @default(uuid())
   name          String
@@ -24,7 +39,7 @@ model Product {
   note          String?
   minimumStock  Int?          @default(0)
   notification Notification[]
-  shopRelations ProductShop[] // Relation to explicit table
+  shopCategoriesProducts ProductCategory[] // Relation to explicit table
   stockHistory  stockHistory[] // Relation to stock history
   bucketItems  BucketItem[] // Relation to bucket items
 
@@ -39,25 +54,16 @@ model Shop {
   logoUrl           String?
   slug             String        @unique
   isActive         Boolean       @default(true)
-  productRelations ProductShop[] // Relation to explicit table
+  categories       Category[]    // Relation to categories
+  categoryRelations ProductCategory[] // Relation to explicit table
   butketItems      BucketItem[] // Relation to bucket items
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 }
 
-model ProductShop {
-  productId   String
-  shopId      String
-  product     Product @relation(fields: [productId], references: [id])
-  shop        Shop    @relation(fields: [shopId], references: [id])
-  stockInShop Int     @default(0) // Additional field
-
-  @@id([productId, shopId]) // Composite primary key
-}
-
 model Bucket {
   id     String        @id @default(uuid())
-  // user   User          @relation(fields: [userId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
   userId String        @unique
   items  BucketItem[]
 }
@@ -94,9 +100,32 @@ model stockHistory {
   id          String   @id @default(uuid())
   productId   String
   product     Product  @relation(fields: [productId], references: [id])
-  quantity    Int
+  oldQuantity Int
+  newQuantity Int
   changeType  String   // e.g., "IN", "OUT", "ADJUSTMENT"
+  note        String?
   createdAt   DateTime @default(now())
 
   @@index([productId]) // Index for faster lookups by product
+}
+
+model Category {
+  id            String          @id @default(uuid())
+  name          String
+  description   String?
+  imageUrl      String?
+  shopId        String
+  slug          String
+  shop          Shop            @relation(fields: [shopId], references: [id])
+  products      ProductCategory[]
+}
+
+model ProductCategory {
+  productId     String
+  shopId        String
+  categoryId    String
+  product       Product         @relation(fields: [productId], references: [id])
+  shop          Shop            @relation(fields: [shopId], references: [id])
+  category      Category        @relation(fields: [categoryId], references: [id])
+  @@id([productId, shopId, categoryId])
 }
