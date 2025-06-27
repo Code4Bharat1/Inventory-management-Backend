@@ -1,4 +1,4 @@
-// routes/shopRoutes.js
+//shop.route.js
 import express from 'express';
 import { createShop , createCategory , addProductsToCategory, removeProductsFromCategory , getCategoriesForShop , getAllProductsForShop , editCategory , addItemsToBucket , removeItemsFromBucket} from '../controller/shop.controller.js';
 
