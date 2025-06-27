@@ -617,11 +617,11 @@ export const getAllProductsForShop = async (req, res) => {
 // Add multiple products (from a specific shop) to the user's bucket
 export const addItemsToBucket = async (req, res) => {
   try {
-    const userId = req.user.id;
+    // const userId = req.user.id;
     const { shopId, items } = req.body; // ✅ changed from productIds to items
 
     // Validate required inputs
-    if (!shopId || !Array.isArray(productIds) || productIds.length === 0) {
+    if (!shopId) {
       return res
         .status(400)
         .json({ error: "shopId and productIds (array) are required." });
@@ -643,10 +643,10 @@ export const addItemsToBucket = async (req, res) => {
     }
 
     // Ensure user has a bucket, or create one if not
-    let bucket = await Prisma.bucket.findUnique({ where: { userId } });
-    if (!bucket) {
-      bucket = await Prisma.bucket.create({ data: { userId } });
-    }
+    // let bucket = await Prisma.bucket.findUnique({ where: { userId } });
+    // if (!bucket) {
+    //   bucket = await Prisma.bucket.create({ data: { userId } });
+    // }
 
     let addedCount = 0;
 
@@ -706,11 +706,11 @@ export const addItemsToBucket = async (req, res) => {
 // Remove selected products (from a specific shop) from the user's bucket
 export const removeItemsFromBucket = async (req, res) => {
   try {
-    const userId = req.user.id;
+    // const userId = req.user.id;
     const { shopId, items } = req.body; // ✅ changed from productIds to items
 
     // Validate required inputs
-    if (!shopId || !Array.isArray(productIds) || productIds.length === 0) {
+    if (!shopId ) {
       return res
         .status(400)
         .json({ error: "shopId and productIds (array) are required." });
@@ -720,8 +720,8 @@ export const removeItemsFromBucket = async (req, res) => {
     const productIds = items.map(i => i.productId); // ✅ used if needed for validation or debug
 
     // Get user's bucket
-    const bucket = await Prisma.bucket.findUnique({ where: { userId } });
-    if (!bucket) return res.status(404).json({ error: "Bucket not found." });
+    // const bucket = await Prisma.bucket.findUnique({ where: { userId } });
+    // if (!bucket) return res.status(404).json({ error: "Bucket not found." });
 
     // Delete all matching product+shop entries from the bucket
     const deleteResult = await Prisma.bucketItem.deleteMany({
