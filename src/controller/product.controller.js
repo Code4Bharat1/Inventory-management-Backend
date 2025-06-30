@@ -1,9 +1,108 @@
 import Prisma from "../config/db.conf.js";
 import { createLowStockNotification } from "../services/notificationService.js";
+import multer from "multer";
+import XLSX from "xlsx";
+import { v4 as uuidv4 } from "uuid";
 
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only Excel and CSV files are allowed"), false);
+    }
+  },
+});
+
+// Bulk upload products from Excel/CSV
+export const bulkUploadProducts = [
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Parse the uploaded file
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet);
+
+      // Validate and prepare data for insertion
+      const products = data.map((row) => {
+        if (!row.name || !row.quantity || !row.price) {
+          throw new Error(
+            `Invalid data: Missing required fields for product '${row.name || "unknown"}'`
+          );
+        }
+
+        const quantity = Number(row.quantity);
+        const price = Number(row.price);
+        const minimumStock = row.minimumStock ? Number(row.minimumStock) : 0;
+
+        if (isNaN(quantity) || isNaN(price)) {
+          throw new Error(
+            `Invalid data: Quantity or price is not a number for product '${row.name}'`
+          );
+        }
+
+        return {
+          id: uuidv4(),
+          name: row.name,
+          category: row.category || null,
+          description: row.description || null,
+          quantity,
+          price,
+          imageUrl: row.imageUrl || null,
+          note: row.note || null,
+          minimumStock,
+        };
+      });
+
+      // Insert products in bulk using Prisma
+      await Prisma.product.createMany({
+        data: products,
+        skipDuplicates: true,
+      });
+
+      // Retrieve the created products to get their IDs
+      const createdProducts = await Prisma.product.findMany({
+        where: {
+          id: { in: products.map((p) => p.id) },
+        },
+      });
+
+      // // Check for low stock and create notifications
+      // const lowStockProducts = createdProducts.filter(
+      //   (p) => p.quantity < (p.minimumStock || 0)
+      // );
+      // for (const product of lowStockProducts) {
+      //   await createLowStockNotification(product);
+      // } 
+      // just want to insert product so dont need of notification
+
+      res.status(201).json({
+        message: "Products uploaded successfully",
+        count: createdProducts.length,
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+];
+
+// Existing controller functions (unchanged)
 export const createProduct = async (req, res) => {
   try {
-    // Destructure only allowed fields from req.body
     const {
       name,
       category,
@@ -15,7 +114,7 @@ export const createProduct = async (req, res) => {
       minimumStock,
     } = req.body;
 
-    const newProduct = await Prisma.Product.create({
+    const newProduct = await Prisma.product.create({
       data: {
         name,
         quantity,
@@ -36,10 +135,8 @@ export const createProduct = async (req, res) => {
 
 export const getProducts = async (req, res) => {
   try {
-    // Build filters based on query params
     const filters = {};
 
-    // Keyword search (name, category, description)
     if (req.query.search) {
       const search = req.query.search.trim();
       filters.OR = [
@@ -49,36 +146,28 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // Filter by category
     if (req.query.category) {
       filters.category = req.query.category;
     }
 
-    // Filter by price range
     if (req.query.minPrice || req.query.maxPrice) {
       filters.price = {};
       if (req.query.minPrice) filters.price.gte = Number(req.query.minPrice);
       if (req.query.maxPrice) filters.price.lte = Number(req.query.maxPrice);
     }
 
-    // Filter by stock status
     if (req.query.stockStatus) {
       if (req.query.stockStatus === "in") {
         filters.quantity = { gt: 0 };
       } else if (req.query.stockStatus === "out") {
         filters.quantity = 0;
-      } else if (req.query.stockStatus === "low") {
-        // Prisma doesn't support $expr; handle low stock in-memory after query
-        // We'll filter 'low' later.
       }
     }
 
-    // Pagination
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    // Query products from Prisma
     let products = await Prisma.product.findMany({
       where: filters,
       skip,
@@ -86,7 +175,6 @@ export const getProducts = async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // If stockStatus === 'low', filter in-memory
     if (req.query.stockStatus === "low") {
       products = products.filter((p) => p.quantity < (p.minimumStock ?? 0));
     }
@@ -97,7 +185,6 @@ export const getProducts = async (req, res) => {
   }
 };
 
-// Get a single product by ID
 export const getProductById = async (req, res) => {
   try {
     const product = await Prisma.product.findUnique({
@@ -110,14 +197,13 @@ export const getProductById = async (req, res) => {
   }
 };
 
-// Update product by ID
 export const updateProduct = async (req, res) => {
   try {
     const product = await Prisma.product.update({
       where: { id: req.params.id },
       data: {
-        ...req.body, // Spread operator to update all fields
-        updatedAt: new Date(), // Update timestamp
+        ...req.body,
+        updatedAt: new Date(),
       },
     });
     if (!product) return res.status(404).json({ error: "Product not found" });
@@ -127,7 +213,6 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-// Delete product by ID
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Prisma.product.delete({
@@ -140,12 +225,10 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
-// Update product quantity
 export const updateProductQuantity = async (req, res) => {
   const { id } = req.params;
-  const { quantity, action, note } = req.body; // get action and note if provided
+  const { quantity, action, note } = req.body;
 
-  // Input validation
   if (typeof quantity !== "number" || quantity < 0) {
     return res
       .status(400)
@@ -158,32 +241,30 @@ export const updateProductQuantity = async (req, res) => {
     });
     if (!product) return res.status(404).json({ error: "Product not found." });
 
-    // Store old quantity before updating
     const oldQuantity = product.quantity;
 
-    // Update quantity
-    product.quantity = quantity;
-    await product.save();
+    await Prisma.product.update({
+      where: { id },
+      data: { quantity },
+    });
 
-    // Trigger low stock notification if needed
-    if (product.quantity < product.minimumStock) {
+    if (product.quantity < (product.minimumStock || 0)) {
       await createLowStockNotification(product);
     }
 
-    // Log stock history
     await Prisma.stockHistory.create({
       data: {
         productId: product.id,
         oldQuantity,
-        newQuantity: product.quantity,
-        changeType: action || "manual_update", // Default to manual update if no action provided
-        note: note || "", // Use provided note or empty string
+        newQuantity: quantity,
+        changeType: action || "manual_update",
+        note: note || "",
       },
     });
 
     res.json({
       message: "Product quantity updated.",
-      product,
+      product: { ...product, quantity },
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,4 +1,3 @@
-
 import Prisma from "../config/db.conf.js";
 import slugify from "slugify";
 
@@ -212,21 +211,156 @@ export const createCategory = async (req, res) => {
   }
 };
 
+// Search categories
+export const searchCategories = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const {
+      search, // Search term for category name
+      page = 1, // Pagination: default page 1
+      limit = 10, // Pagination: default 10 items per page
+    } = req.query;
+
+    // Validate inputs
+    if (!slug || typeof slug !== "string" || slug.trim() === "") {
+      return res.status(400).json({
+        error: "Shop slug is required and must be a non-empty string.",
+      });
+    }
+    if (search && (typeof search !== "string" || search.trim().length < 2)) {
+      return res.status(400).json({
+        error: "Search term, if provided, must be at least 2 characters long.",
+      });
+    }
+    if (isNaN(page) || Number(page) < 1) {
+      return res.status(400).json({
+        error: "page must be a positive integer.",
+      });
+    }
+    if (isNaN(limit) || Number(limit) < 1 || Number(limit) > 100) {
+      return res.status(400).json({
+        error: "limit must be a positive integer between 1 and 100.",
+      });
+    }
+
+    // Check if the shop exists
+    const shop = await Prisma.shop.findUnique({
+      where: { slug },
+    });
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found." });
+    }
+
+    // Build query conditions
+    const where = {
+      shopId: shop.id,
+      ...(search
+        ? {
+            name: {
+              contains: search.trim(),
+              mode: "insensitive", // Case-insensitive search
+            },
+          }
+        : {}),
+    };
+
+    // Calculate pagination
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Fetch categories with pagination
+    const [categories, totalCount] = await Promise.all([
+      Prisma.category.findMany({
+        where,
+        skip,
+        take: limitNum,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          imageUrl: true,
+          slug: true,
+        },
+        orderBy: { name: "asc" }, // Sort by name for consistency
+      }),
+      Prisma.category.count({ where }),
+    ]);
+
+    // Prepare pagination metadata
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    // Build search summary
+    const searchSummary = {
+      shop: shop.name,
+      filtersApplied: {
+        ...(search ? { search: search.trim() } : {}),
+      },
+    };
+
+    // If no categories are found, return an empty array
+    if (categories.length === 0) {
+      return res.status(200).json({
+        message: "No categories found matching the criteria.",
+        categories: [],
+        searchSummary,
+        pagination: {
+          totalCount,
+          totalPages,
+          currentPage: pageNum,
+          limit: limitNum,
+          hasNextPage,
+          hasPrevPage,
+        },
+      });
+    }
+
+    res.status(200).json({
+      message: `${categories.length} category(ies) found.`,
+      categories,
+      searchSummary,
+      pagination: {
+        totalCount,
+        totalPages,
+        currentPage: pageNum,
+        limit: limitNum,
+        hasNextPage,
+        hasPrevPage,
+      },
+    });
+  } catch (error) {
+    console.error("Error in searchCategories:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
 //edit category
 export const editCategory = async (req, res) => {
   try {
     const { shopId } = req.params; // Get shopId and categoryId from URL params
-    const { categoryId , name, description, imageUrl } = req.body;
+    const { categoryId, name, description, imageUrl } = req.body;
 
     // Validate inputs
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
-      return res.status(400).json({ error: "shopId is required and must be a non-empty string." });
+      return res
+        .status(400)
+        .json({ error: "shopId is required and must be a non-empty string." });
     }
-    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
-      return res.status(400).json({ error: "categoryId is required and must be a non-empty string." });
+    if (
+      !categoryId ||
+      typeof categoryId !== "string" ||
+      categoryId.trim() === ""
+    ) {
+      return res.status(400).json({
+        error: "categoryId is required and must be a non-empty string.",
+      });
     }
     if (name && (typeof name !== "string" || name.trim() === "")) {
-      return res.status(400).json({ error: "Name, if provided, must be a non-empty string." });
+      return res
+        .status(400)
+        .json({ error: "Name, if provided, must be a non-empty string." });
     }
 
     // Check if the shop exists
@@ -243,7 +377,9 @@ export const editCategory = async (req, res) => {
       include: { shop: true },
     });
     if (!category || category.shopId !== shopId) {
-      return res.status(404).json({ error: "Category not found or not associated with the shop." });
+      return res
+        .status(404)
+        .json({ error: "Category not found or not associated with the shop." });
     }
 
     // Check for existing category with the same name in the shop (if name is updated)
@@ -256,7 +392,9 @@ export const editCategory = async (req, res) => {
         },
       });
       if (existingCategory) {
-        return res.status(400).json({ error: `Category '${name.trim()}' already exists in this shop.` });
+        return res.status(400).json({
+          error: `Category '${name.trim()}' already exists in this shop.`,
+        });
       }
     }
 
@@ -284,6 +422,40 @@ export const editCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in editCategory:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+// delete category
+export const deleteCategory = async (req, res) => {
+  try {
+    const { shopId } = req.params; // Get shopId and categoryId from URL params
+    const { categoryId } = req.body;
+    // Validate inputs
+    if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "shopId is required and must be a non-empty string." });
+    }
+    if (
+      !categoryId ||
+      typeof categoryId !== "string" ||
+      categoryId.trim() === ""
+    ) {
+      return res.status(400).json({
+        error: "categoryId is required and must be a non-empty string.",
+      });
+    }
+    const deleteCategory = await Prisma.category.delete({
+      where: { id: categoryId },
+      include: { shopId: shopId },
+    });
+    res.status(200).json({
+      message: "Category delete successfully!",
+      category: deleteCategory
+    });
+  } catch (error) {
+    console.error("Error in deleteCategory:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };
@@ -505,7 +677,6 @@ export const removeProductsFromCategory = async (req, res) => {
   }
 };
 
-
 //get all categorys
 export const getCategoriesForShop = async (req, res) => {
   try {
@@ -513,7 +684,9 @@ export const getCategoriesForShop = async (req, res) => {
 
     // Validate inputs
     if (!slug || typeof slug !== "string" || slug.trim() === "") {
-      return res.status(400).json({ error: "Shop slug is required and must be a non-empty string." });
+      return res.status(400).json({
+        error: "Shop slug is required and must be a non-empty string.",
+      });
     }
 
     // Check if the shop exists
@@ -549,7 +722,6 @@ export const getCategoriesForShop = async (req, res) => {
   }
 };
 
-
 // get product of that category
 export const getAllProductsForShop = async (req, res) => {
   try {
@@ -557,10 +729,18 @@ export const getAllProductsForShop = async (req, res) => {
 
     // Validate inputs
     if (!slug || typeof slug !== "string" || slug.trim() === "") {
-      return res.status(400).json({ error: "Shop slug is required and must be a non-empty string." });
+      return res.status(400).json({
+        error: "Shop slug is required and must be a non-empty string.",
+      });
     }
-    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
-      return res.status(400).json({ error: "categoryId is required and must be a non-empty string." });
+    if (
+      !categoryId ||
+      typeof categoryId !== "string" ||
+      categoryId.trim() === ""
+    ) {
+      return res.status(400).json({
+        error: "categoryId is required and must be a non-empty string.",
+      });
     }
 
     // Check if the shop exists
@@ -577,7 +757,9 @@ export const getAllProductsForShop = async (req, res) => {
       include: { shop: true },
     });
     if (!category || category.shopId !== shop.id) {
-      return res.status(404).json({ error: "Category not found or not associated with the shop." });
+      return res
+        .status(404)
+        .json({ error: "Category not found or not associated with the shop." });
     }
 
     // Find products associated with the category and shop via ProductCategory
@@ -612,6 +794,189 @@ export const getAllProductsForShop = async (req, res) => {
   }
 };
 
+// search and filter the product
+export const searchAndFilterProducts = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const {
+      search, // Search term for product name or description
+      minPrice, // Optional minimum price
+      maxPrice, // Optional maximum price
+      minimumStock, // Optional minimum stock quantity
+      inStock, // Optional: true for products with quantity > 0
+      sortBy = "name", // Default sort by name
+      sortOrder = "asc", // Default sort order ascending
+      page = 1, // Pagination: default page 1
+      limit = 10, // Pagination: default 10 items per page
+    } = req.query;
+
+    // Validate inputs
+    if (!slug || typeof slug !== "string" || slug.trim() === "") {
+      return res.status(400).json({
+        error: "Shop slug is required and must be a non-empty string.",
+      });
+    }
+    if (search && (typeof search !== "string" || search.trim().length < 2)) {
+      return res.status(400).json({
+        error: "Search term, if provided, must be at least 2 characters long.",
+      });
+    }
+    if (minPrice && (isNaN(minPrice) || Number(minPrice) < 0)) {
+      return res.status(400).json({
+        error: "minPrice, if provided, must be a non-negative number.",
+      });
+    }
+    if (maxPrice && (isNaN(maxPrice) || Number(maxPrice) < 0)) {
+      return res.status(400).json({
+        error: "maxPrice, if provided, must be a non-negative number.",
+      });
+    }
+    if (minPrice && maxPrice && Number(minPrice) > Number(maxPrice)) {
+      return res.status(400).json({
+        error: "minPrice must not exceed maxPrice.",
+      });
+    }
+    if (minimumStock && (isNaN(minimumStock) || Number(minimumStock) < 0)) {
+      return res.status(400).json({
+        error: "minimumStock, if provided, must be a non-negative number.",
+      });
+    }
+    if (inStock && !["true", "false"].includes(inStock.toString())) {
+      return res.status(400).json({
+        error: "inStock, if provided, must be a boolean (true or false).",
+      });
+    }
+    if (isNaN(page) || Number(page) < 1) {
+      return res.status(400).json({
+        error: "page must be a positive integer.",
+      });
+    }
+    if (isNaN(limit) || Number(limit) < 1 || Number(limit) > 100) {
+      return res.status(400).json({
+        error: "limit must be a positive integer between 1 and 100.",
+      });
+    }
+    if (!["name", "price", "quantity"].includes(sortBy)) {
+      return res.status(400).json({
+        error: "sortBy must be one of 'name', 'price', or 'quantity'.",
+      });
+    }
+    if (!["asc", "desc"].includes(sortOrder)) {
+      return res.status(400).json({
+        error: "sortOrder must be 'asc' or 'desc'.",
+      });
+    }
+
+    // Check if the shop exists
+    const shop = await Prisma.shop.findUnique({
+      where: { slug },
+    });
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found." });
+    }
+
+    // Build query conditions
+    const where = {
+      shopCategoriesProducts: {
+        some: {
+          shopId: shop.id, // Ensure products are associated with the shop
+        },
+      },
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search.trim(), mode: "insensitive" } },
+              { description: { contains: search.trim(), mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      ...(minPrice ? { price: { gte: Number(minPrice) } } : {}),
+      ...(maxPrice ? { price: { lte: Number(maxPrice) } } : {}),
+      ...(inStock === "true" ? { quantity: { gt: 0 } } : {}),
+      ...(minimumStock ? { quantity: { gte: Number(minimumStock) } } : {}),
+    };
+
+    // Calculate pagination
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Define sorting
+    const orderBy = { [sortBy]: sortOrder };
+
+    // Fetch products with filters and pagination
+    const [products, totalCount] = await Promise.all([
+      Prisma.product.findMany({
+        where,
+        skip,
+        take: limitNum,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          quantity: true,
+          imageUrl: true, // Include if available in schema
+        },
+        orderBy,
+      }),
+      Prisma.product.count({ where }),
+    ]);
+
+    // Prepare pagination metadata
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    // Build search summary
+    const searchSummary = {
+      shop: shop.name,
+      filtersApplied: {
+        ...(search ? { search: search.trim() } : {}),
+        ...(minPrice ? { minPrice: Number(minPrice) } : {}),
+        ...(maxPrice ? { maxPrice: Number(maxPrice) } : {}),
+        ...(inStock ? { inStock: inStock === "true" } : {}),
+        ...(minimumStock ? { minimumStock: Number(minimumStock) } : {}),
+        sortBy,
+        sortOrder,
+      },
+    };
+
+    // If no products are found, return an empty array
+    if (products.length === 0) {
+      return res.status(200).json({
+        message: "No products found matching the criteria.",
+        products: [],
+        searchSummary,
+        pagination: {
+          totalCount,
+          totalPages,
+          currentPage: pageNum,
+          limit: limitNum,
+          hasNextPage,
+          hasPrevPage,
+        },
+      });
+    }
+
+    res.status(200).json({
+      message: `${products.length} product(s) found.`,
+      products,
+      searchSummary,
+      pagination: {
+        totalCount,
+        totalPages,
+        currentPage: pageNum,
+        limit: limitNum,
+        hasNextPage,
+        hasPrevPage,
+      },
+    });
+  } catch (error) {
+    console.error("Error in searchAndFilterProducts:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
 
 // Add multiple products (from a specific shop) to the user's bucket
 export const addItemsToBucket = async (req, res) => {
@@ -626,16 +991,25 @@ export const addItemsToBucket = async (req, res) => {
         .json({ error: "shopId is required and must be a non-empty string." });
     }
     if (!Array.isArray(items) || items.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "items (array of { productId, quantity }) is required and must not be empty." });
+      return res.status(400).json({
+        error:
+          "items (array of { productId, quantity }) is required and must not be empty.",
+      });
     }
     for (const item of items) {
-      if (!item.productId || typeof item.productId !== "string" || item.productId.trim() === "") {
-        return res.status(400).json({ error: "Each item must have a valid productId." });
+      if (
+        !item.productId ||
+        typeof item.productId !== "string" ||
+        item.productId.trim() === ""
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Each item must have a valid productId." });
       }
       if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
-        return res.status(400).json({ error: `Invalid quantity for product ${item.productId}. Quantity must be a positive integer.` });
+        return res.status(400).json({
+          error: `Invalid quantity for product ${item.productId}. Quantity must be a positive integer.`,
+        });
       }
     }
 
@@ -658,7 +1032,9 @@ export const addItemsToBucket = async (req, res) => {
     for (const item of items) {
       const product = products.find((p) => p.id === item.productId);
       if (product.quantity < item.quantity) {
-        return res.status(400).json({ error: `Insufficient stock for product ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}` });
+        return res.status(400).json({
+          error: `Insufficient stock for product ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}`,
+        });
       }
     }
 
@@ -690,10 +1066,10 @@ export const addItemsToBucket = async (req, res) => {
       });
 
       if (existingItem) {
-        // Update quantity if item exists
+        // Update quantity to the new value (overwrite instead of increment)
         await Prisma.bucketItem.update({
           where: { id: existingItem.id },
-          data: { quantity: existingItem.quantity + quantity },
+          data: { quantity }, // Set quantity directly to the provided value
         });
         updatedCount++;
       } else {
@@ -719,7 +1095,6 @@ export const addItemsToBucket = async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
-
 // Remove selected products (from a specific shop) from the user's bucket
 export const removeItemsFromBucket = async (req, res) => {
   try {
@@ -733,13 +1108,15 @@ export const removeItemsFromBucket = async (req, res) => {
         .json({ error: "shopId is required and must be a non-empty string." });
     }
     if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "productIds (array) is required and must not be empty." });
+      return res.status(400).json({
+        error: "productIds (array) is required and must not be empty.",
+      });
     }
     for (const productId of productIds) {
       if (typeof productId !== "string" || productId.trim() === "") {
-        return res.status(400).json({ error: "Each productId must be a non-empty string." });
+        return res
+          .status(400)
+          .json({ error: "Each productId must be a non-empty string." });
       }
     }
 
@@ -772,6 +1149,7 @@ export const removeItemsFromBucket = async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
 //get all bucket item
 export const getBucketItems = async (req, res) => {
   try {
@@ -832,7 +1210,6 @@ export const getBucketItems = async (req, res) => {
   }
 };
 
-
 //create order
 export const createOrder = async (req, res) => {
   try {
@@ -866,7 +1243,9 @@ export const createOrder = async (req, res) => {
 
     // Validate bucket existence and items
     if (!bucket || bucket.items.length === 0) {
-      return res.status(400).json({ error: "Bucket is empty or does not exist." });
+      return res
+        .status(400)
+        .json({ error: "Bucket is empty or does not exist." });
     }
 
     // Group items by shop to handle multiple shops if needed
@@ -891,7 +1270,9 @@ export const createOrder = async (req, res) => {
     for (const shopId in itemsByShop) {
       const { items } = itemsByShop[shopId];
       for (const item of items) {
-        const product = bucket.items.find((i) => i.product.id === item.productId).product;
+        const product = bucket.items.find(
+          (i) => i.product.id === item.productId
+        ).product;
         if (product.quantity < item.quantity) {
           return res.status(400).json({
             error: `Insufficient stock for product ${item.productName}. Available: ${product.quantity}, Requested: ${item.quantity}`,
@@ -904,7 +1285,10 @@ export const createOrder = async (req, res) => {
     const orders = [];
     for (const shopId in itemsByShop) {
       const { items, shop } = itemsByShop[shopId];
-      const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const totalAmount = items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
 
       // Create order for the shop
       const order = await Prisma.order.create({
@@ -940,7 +1324,11 @@ export const createOrder = async (req, res) => {
       // In a real app, this could use email (e.g., Nodemailer), push notifications, or an external service
       const notification = {
         shopOwnerId: shop.ownerId,
-        message: `New order received (Order ID: ${order.id}) from user ${userId} for ${items.length} item(s) totaling $${totalAmount.toFixed(2)}.`,
+        message: `New order received (Order ID: ${
+          order.id
+        }) from user ${userId} for ${
+          items.length
+        } item(s) totaling $${totalAmount.toFixed(2)}.`,
         createdAt: new Date(),
       };
       // Mock: Log notification (replace with actual notification logic, e.g., save to a Notification table or send email)

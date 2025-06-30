@@ -3,6 +3,6 @@ import { getInventoryDashboardSummary } from '../controller/dashboard.controller
 
 const router = express.Router();
 
-router.get('/inventoryDashboard', getInventoryDashboardSummary);
+router.get('/inventoryDashboard', getInventoryDashboardSummary); // get total product , out of stock product and low stock product
 
 export default router;

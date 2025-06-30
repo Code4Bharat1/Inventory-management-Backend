@@ -5,16 +5,18 @@ import {
   getProductById,
   updateProduct,
   deleteProduct,
-  updateProductQuantity
+  updateProductQuantity,
+  bulkUploadProducts
 } from '../controller/product.controller.js';
 
 const router = express.Router();
 
-router.post('/createProduct', createProduct);
-router.get('/getProducts', getProducts);
-router.get('/getProduct/:id', getProductById);
-router.put('/editProduct/:id', updateProduct);
-router.delete('/removeProduct/:id', deleteProduct);
-router.put('/updateQuantity/:id', updateProductQuantity);
+router.post('/createProduct', createProduct); // create the product
+router.get('/getProducts', getProducts); //get all products
+router.get('/getProduct/:id', getProductById); // get specific product details
+router.put('/editProduct/:id', updateProduct); // edit the product details 
+router.delete('/removeProduct/:id', deleteProduct); // delete the product
+router.post('/bulk-upload' , bulkUploadProducts)
+router.put('/updateQuantity/:id', updateProductQuantity); // (for test)
 
 export default router;

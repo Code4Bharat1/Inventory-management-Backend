@@ -89,7 +89,7 @@ model BucketItem {
 }
 
 
-model Notification{
+model Notification {
   id          String   @id @default(uuid())
   productId   String
   product     Product  @relation(fields: [productId], references: [id])
@@ -98,8 +98,7 @@ model Notification{
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  @@index([productId]) // Index for faster lookups by product
+  @@index([productId])
 }
 model stockHistory {
   id          String   @id @default(uuid())

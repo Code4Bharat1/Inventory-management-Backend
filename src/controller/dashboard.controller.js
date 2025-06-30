@@ -1,5 +1,7 @@
 import Prisma from "../config/db.conf.js"
 
+
+// get total number of product , total number of out-stock product and total number of low-stock product
 export const getInventoryDashboardSummary = async (req, res) => {
   try {
     // 1. Total products
