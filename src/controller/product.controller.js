@@ -41,7 +41,9 @@ export const bulkUploadProducts = [
       const products = data.map((row) => {
         if (!row.name || !row.quantity || !row.price) {
           throw new Error(
-            `Invalid data: Missing required fields for product '${row.name || "unknown"}'`
+            `Invalid data: Missing required fields for product '${
+              row.name || "unknown"
+            }'`
           );
         }
 
@@ -87,7 +89,7 @@ export const bulkUploadProducts = [
       // );
       // for (const product of lowStockProducts) {
       //   await createLowStockNotification(product);
-      // } 
+      // }
       // just want to insert product so dont need of notification
 
       res.status(201).json({
@@ -112,18 +114,44 @@ export const createProduct = async (req, res) => {
       imageUrl,
       note,
       minimumStock,
+      sku,
     } = req.body;
+
+    // Validation
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ error: "Product name is required" });
+    }
+
+    const parsedQuantity = parseInt(quantity);
+    if (isNaN(parsedQuantity)) {
+      return res.status(400).json({ error: "Quantity must be a valid number" });
+    }
+
+    const parsedPrice = price ? parseFloat(price) : null;
+    if (price && isNaN(parsedPrice)) {
+      return res.status(400).json({ error: "Price must be a valid number" });
+    }
+
+    const parsedMinStock = minimumStock ? parseInt(minimumStock) : 0;
+
+    // Auto-generate SKU if not provided
+    const generatedSku =
+      sku ||
+      `SKU-${Date.now().toString().slice(-6)}-${Math.floor(
+        1000 + Math.random() * 9000
+      )}`;
 
     const newProduct = await Prisma.product.create({
       data: {
         name,
-        quantity,
-        price,
+        quantity: parsedQuantity,
+        price: parsedPrice,
         category,
         description,
         imageUrl,
         note,
-        minimumStock,
+        minimumStock: parsedMinStock,
+        sku: generatedSku,
       },
     });
 
@@ -178,6 +206,17 @@ export const getProducts = async (req, res) => {
     if (req.query.stockStatus === "low") {
       products = products.filter((p) => p.quantity < (p.minimumStock ?? 0));
     }
+
+    // Add status
+    products = products.map((p) => {
+      let status = "In Stock";
+      if (p.quantity === 0) {
+        status = "Out of Stock";
+      } else if (p.minimumStock != null && p.quantity < p.minimumStock) {
+        status = "Low Stock";
+      }
+      return { ...p, status };
+    });
 
     res.json(products);
   } catch (error) {

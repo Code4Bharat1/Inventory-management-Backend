@@ -15,6 +15,7 @@ import {
   deleteCategory,
   searchAndFilterProducts,
   searchCategories,
+  getOrderHistory,
 } from "../controller/shop.controller.js";
 import { authenticateJWT } from "../middleware/auth.middleware.js";
 const router = express.Router();
@@ -45,5 +46,6 @@ router.delete(
 ); // remove product from bucket
 router.get("/:slug/:categoryId/bucket", authenticateJWT, getBucketItems); // get the bucket
 router.post("/:slug/:categoryId/order", authenticateJWT, createOrder); // order the products
+router.get("/:slug/:categoryId/order-history" , authenticateJWT , getOrderHistory)
 
 export default router;

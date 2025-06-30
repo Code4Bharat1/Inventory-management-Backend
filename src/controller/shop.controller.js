@@ -452,7 +452,7 @@ export const deleteCategory = async (req, res) => {
     });
     res.status(200).json({
       message: "Category delete successfully!",
-      category: deleteCategory
+      category: deleteCategory,
     });
   } catch (error) {
     console.error("Error in deleteCategory:", error);
@@ -1358,6 +1358,213 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in createOrder:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+// Get user order history
+export const getOrderHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId; // Get userId from authenticated user
+    const {
+      status, // Optional: Filter by order status (e.g., PENDING, COMPLETED)
+      shopId, // Optional: Filter by shop ID
+      minTotal, // Optional: Minimum total amount
+      maxTotal, // Optional: Maximum total amount
+      startDate, // Optional: Filter orders after this date
+      endDate, // Optional: Filter orders before this date
+      sortBy = "createdAt", // Default sort by creation date
+      sortOrder = "desc", // Default sort order descending
+      page = 1, // Pagination: default page 1
+      limit = 10, // Pagination: default 10 items per page
+    } = req.query;
+
+    // Validate inputs
+    if (status !== undefined && (typeof status !== "string" || status.trim() === "")) {
+      return res.status(400).json({
+        error: "status, if provided, must be a non-empty string.",
+      });
+    }
+    if (shopId !== undefined && (typeof shopId !== "string" || shopId.trim() === "")) {
+      return res.status(400).json({
+        error: "shopId, if provided, must be a non-empty string.",
+      });
+    }
+    if (minTotal && (isNaN(minTotal) || Number(minTotal) < 0)) {
+      return res.status(400).json({
+        error: "minTotal, if provided, must be a non-negative number.",
+      });
+    }
+    if (maxTotal && (isNaN(maxTotal) || Number(maxTotal) < 0)) {
+      return res.status(400).json({
+        error: "maxTotal, if provided, must be a non-negative number.",
+      });
+    }
+    if (minTotal && maxTotal && Number(minTotal) > Number(maxTotal)) {
+      return res.status(400).json({
+        error: "minTotal must not exceed maxTotal.",
+      });
+    }
+    if (startDate && isNaN(Date.parse(startDate))) {
+      return res.status(400).json({
+        error: "startDate, if provided, must be a valid date.",
+      });
+    }
+    if (endDate && isNaN(Date.parse(endDate))) {
+      return res.status(400).json({
+        error: "endDate, if provided, must be a valid date.",
+      });
+    }
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({
+        error: "startDate must not be later than endDate.",
+      });
+    }
+    if (isNaN(page) || Number(page) < 1) {
+      return res.status(400).json({
+        error: "page must be a positive integer.",
+      });
+    }
+    if (isNaN(limit) || Number(limit) < 1 || Number(limit) > 100) {
+      return res.status(400).json({
+        error: "limit must be a positive integer between 1 and 100.",
+      });
+    }
+    if (!["createdAt", "totalAmount"].includes(sortBy)) {
+      return res.status(400).json({
+        error: "sortBy must be one of 'createdAt' or 'totalAmount'.",
+      });
+    }
+    if (!["asc", "desc"].includes(sortOrder)) {
+      return res.status(400).json({
+        error: "sortOrder must be 'asc' or 'desc'.",
+      });
+    }
+
+    // Build query conditions
+    const where = {
+      userId,
+      ...(status ? { status: status.trim().toUpperCase() } : {}),
+      ...(shopId ? { shopId } : {}),
+      ...(minTotal ? { totalAmount: { gte: Number(minTotal) } } : {}),
+      ...(maxTotal ? { totalAmount: { lte: Number(maxTotal) } } : {}),
+      ...(startDate ? { createdAt: { gte: new Date(startDate) } } : {}),
+      ...(endDate ? { createdAt: { lte: new Date(endDate) } } : {}),
+    };
+
+    // Calculate pagination
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Define sorting
+    const orderBy = { [sortBy]: sortOrder };
+
+    // Fetch orders with pagination
+    const [orders, totalCount] = await Promise.all([
+      Prisma.order.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy,
+        include: {
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      Prisma.order.count({ where }),
+    ]);
+
+    // Prepare pagination metadata
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    // Build search summary
+    const searchSummary = {
+      filtersApplied: {
+        ...(status ? { status: status.trim().toUpperCase() } : {}),
+        ...(shopId ? { shopId } : {}),
+        ...(minTotal ? { minTotal: Number(minTotal) } : {}),
+        ...(maxTotal ? { maxTotal: Number(maxTotal) } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        sortBy,
+        sortOrder,
+      },
+    };
+
+    // If no orders are found, return an empty array
+    if (orders.length === 0) {
+      return res.status(200).json({
+        message: "No orders found matching the criteria.",
+        orders: [],
+        searchSummary,
+        pagination: {
+          totalCount,
+          totalPages,
+          currentPage: pageNum,
+          limit: limitNum,
+          hasNextPage,
+          hasPrevPage,
+        },
+      });
+    }
+
+    // Format orders for response
+    const formattedOrders = orders.map((order) => ({
+      orderId: order.id,
+      shopId: order.shop.id,
+      shopName: order.shop.name,
+      shopSlug: order.shop.slug,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      createdAt: order.createdAt,
+      items: order.orderItems.map((item) => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+    }));
+
+    // Generate base URL for shop links
+    const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+
+    res.status(200).json({
+      message: `${orders.length} order(s) found.`,
+      orders: formattedOrders.map((order) => ({
+        ...order,
+        shopUrl: `${baseUrl}/shops/${order.shopSlug}`,
+      })),
+      searchSummary,
+      pagination: {
+        totalCount,
+        totalPages,
+        currentPage: pageNum,
+        limit: limitNum,
+        hasNextPage,
+        hasPrevPage,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getOrderHistory:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };
