@@ -111,11 +111,15 @@ export const createProduct = async (req, res) => {
       description,
       quantity,
       price,
-      imageUrl,
       note,
       minimumStock,
       sku,
     } = req.body;
+
+    const imageFile = req.file; // image will be here
+
+    // You can upload imageFile to S3, Cloudinary, Wasabi, etc., and get imageUrl
+    const imageUrl = imageFile ? `/uploads/${imageFile.filename}` : null;
 
     // Validation
     if (!name || name.trim() === "") {
@@ -238,15 +242,34 @@ export const getProductById = async (req, res) => {
 
 export const updateProduct = async (req, res) => {
   try {
-    const product = await Prisma.product.update({
-      where: { id: req.params.id },
+    const id = req.params.id;
+    const {
+      name,
+      category,
+      quantity,
+      price,
+      description,
+      note,
+      minimumStock,
+      sku,
+    } = req.body;
+
+    const updatedProduct = await Prisma.product.update({
+      where: { id },
       data: {
-        ...req.body,
+        name,
+        category,
+        quantity: parseInt(quantity),
+        price: parseFloat(price),
+        description,
+        note,
+        minimumStock: parseInt(minimumStock),
+        sku,
         updatedAt: new Date(),
       },
     });
-    if (!product) return res.status(404).json({ error: "Product not found" });
-    res.json(product);
+
+    res.json(updatedProduct);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -267,6 +290,7 @@ export const deleteProduct = async (req, res) => {
 export const updateProductQuantity = async (req, res) => {
   const { id } = req.params;
   const { quantity, action, note } = req.body;
+  const { shopId } = req.user;
 
   if (typeof quantity !== "number" || quantity < 0) {
     return res
@@ -287,8 +311,8 @@ export const updateProductQuantity = async (req, res) => {
       data: { quantity },
     });
 
-    if (product.quantity < (product.minimumStock || 0)) {
-      await createLowStockNotification(product);
+    if (quantity < (product.minimumStock || 0)) {
+      await createLowStockNotification(product, shopId);
     }
 
     await Prisma.stockHistory.create({

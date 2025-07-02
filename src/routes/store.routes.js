@@ -16,18 +16,20 @@ import {
   searchAndFilterProducts,
   searchCategories,
   getOrderHistory,
-} from "../controller/shop.controller.js";
+  getAllCategories
+} from "../controller/store.controller.js";
 import { authenticateJWT } from "../middleware/auth.middleware.js";
 const router = express.Router();
 
 // Create a shop (only for authenticated users at one time)
 router.post("/createShop", createShop);
 
-router.post("/:shopId/categories", createCategory); //create a category
-router.put("/:shopId/categories", editCategory); // edit category
-router.delete("/:shopId/catergory", deleteCategory); // delete category
-router.post("/:shopId/categories/products", addProductsToCategory); //add product to category
-router.delete("/:shopId/categories/products", removeProductsFromCategory); // remove product from category
+router.post("/category", authenticateJWT , createCategory); //create a category
+router.get('/category' , authenticateJWT , getAllCategories) // get all category
+router.put("/category" ,  authenticateJWT, editCategory); // edit category
+router.delete('/category/:categoryId', authenticateJWT, deleteCategory);
+router.post("/category/product",authenticateJWT, addProductsToCategory); //add product to category
+router.delete("/category/product",authenticateJWT, removeProductsFromCategory); // remove product from category
 
 
 router.get("/:slug", authenticateJWT, getCategoriesForShop); // get all category

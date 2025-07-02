@@ -14,18 +14,21 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid()) // Unique identifier for the user
-  email     String   @unique // Email for login, must be unique
-  password  String   // Hashed password for authentication
-  name      String   // User's full name
-  phone     String?  // Optional phone number for contact
-  address   String?  // Optional address for shipping
-  role      String   @default("customer") // Role: 'customer' or 'shop_owner'
-  createdAt DateTime @default(now()) // Timestamp for user creation
-  updatedAt DateTime @updatedAt // Timestamp for last update
-  bucket    Bucket?  // One-to-one relation with Bucket
-  orders    Order[]  // One-to-many relation with Orders
-  // shops     Shop[]   @relation("ShopOwner") // Optional: Many-to-many with Shop if user can own shops
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  phone     String?
+  address   String?
+  role      String   @default("customer")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bucket    Bucket?
+  orders    Order[]
+
+  // One-to-many: A user can own multiple shops
+  shops     Shop[]   @relation("UserShops")
 }
 
 
@@ -51,19 +54,21 @@ model Product {
 }
 
 model Shop {
-  id               String        @id @default(uuid())
-  name             String        @unique
-  description      String?
+  id                String             @id @default(uuid())
+  name              String             @unique
+  description       String?
   logoUrl           String?
-  slug             String        @unique
-  ownerId          String?
-  isActive         Boolean       @default(true)
-  categories       Category[]    // Relation to categories
-  categoryRelations ProductCategory[] // Relation to explicit table
-  butketItems      BucketItem[] // Relation to bucket items
-  order            Order[] // realtion to order
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  slug              String             @unique
+  ownerId           String             // Required for ownership link
+  owner             User               @relation("UserShops", fields: [ownerId], references: [id])
+  isActive          Boolean            @default(true)
+  categories        Category[]
+  categoryRelations ProductCategory[]
+  butketItems       BucketItem[]
+  order             Order[]
+  notification      Notification[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model Bucket {
@@ -97,6 +102,8 @@ model Notification {
   message     String
   type        String
   isRead      Boolean  @default(false)
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([productId])
