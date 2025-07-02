@@ -7,6 +7,6 @@ import {
 const router = express.Router();
 
 router.get('/', getOrderNotifications); // ?ownerId=...
-router.post('/order-action', respondToOrderNotification); // Accept/Reject
+router.post('/:id/respond', respondToOrderNotification); // Accept/Reject
 
 export default router;

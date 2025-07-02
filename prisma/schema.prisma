@@ -64,6 +64,7 @@ model Shop {
   order            Order[] // realtion to order
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  orderNotifications OrderNotification[] 
 }
 
 model Bucket {
@@ -145,6 +146,7 @@ model Order {
   shop        Shop         @relation(fields: [shopId], references: [id])
   orderItems  OrderItem[]
   createdAt   DateTime     @default(now())
+  orderNotifications OrderNotification[] 
 }
 
 model OrderItem {
@@ -155,4 +157,18 @@ model OrderItem {
   price     Float
   order     Order    @relation(fields: [orderId], references: [id])
   product   Product  @relation(fields: [productId], references: [id])
+}
+
+model OrderNotification {
+  id         String   @id @default(uuid())
+  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  message    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id])
+
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
 }
