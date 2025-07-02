@@ -149,7 +149,7 @@ export const editShop = async (req, res) => {
 //create category
 export const createCategory = async (req, res) => {
   try {
-    const { shopId } = req.params; // Get shopId from URL params
+    const { shopId } = req.user; // Get req.user from URL params
     const { name, description, imageUrl } = req.body;
 
     // Validate inputs
@@ -210,6 +210,44 @@ export const createCategory = async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
+//get all category
+export const getAllCategories = async (req, res) => {
+  try {
+    const { shopId } = req.user; // Assuming shopId is directly on req.user
+
+    // Validate shopId
+    if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "shopId is required and must be a non-empty string." });
+    }
+
+    // Check if the shop exists
+    const shop = await Prisma.shop.findUnique({
+      where: { id: shopId },
+    });
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found." });
+    }
+
+    // Fetch all categories for the shop
+    const categories = await Prisma.category.findMany({
+      where: { shopId: shop.id },
+      orderBy: { name: "asc" }, // Changed from createdAt to name
+    });
+
+    return res.status(200).json({
+      message: "Categories fetched successfully.",
+      count: categories.length,
+      categories,
+    });
+  } catch (error) {
+    console.error("Error in getAllCategories:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
 
 // Search categories
 export const searchCategories = async (req, res) => {
@@ -339,9 +377,10 @@ export const searchCategories = async (req, res) => {
 //edit category
 export const editCategory = async (req, res) => {
   try {
-    const { shopId } = req.params; // Get shopId and categoryId from URL params
+    const { shopId } = req.user; // Get shopId and categoryId from URL params
     const { categoryId, name, description, imageUrl } = req.body;
 
+    console.log(categoryId)
     // Validate inputs
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
       return res
@@ -429,36 +468,44 @@ export const editCategory = async (req, res) => {
 // delete category
 export const deleteCategory = async (req, res) => {
   try {
-    const { shopId } = req.params; // Get shopId and categoryId from URL params
-    const { categoryId } = req.body;
-    // Validate inputs
+    const { shopId } = req.user; // From JWT
+    const { categoryId } = req.params; // From URL param
+
+    console.log("Received categoryId:", categoryId);
+
+    // Validation
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
-      return res
-        .status(400)
-        .json({ error: "shopId is required and must be a non-empty string." });
+      return res.status(400).json({ error: "shopId is required and must be a non-empty string." });
     }
-    if (
-      !categoryId ||
-      typeof categoryId !== "string" ||
-      categoryId.trim() === ""
-    ) {
-      return res.status(400).json({
-        error: "categoryId is required and must be a non-empty string.",
-      });
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+      return res.status(400).json({ error: "categoryId is required and must be a non-empty string." });
     }
-    const deleteCategory = await Prisma.category.delete({
-      where: { id: categoryId },
-      include: { shopId: shopId },
-    });
+
+    // Check shop existence
+    const shop = await Prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found." });
+    }
+
+    // Check category existence
+    const category = await Prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category || category.shopId !== shopId) {
+      return res.status(404).json({ error: "Category not found or not associated with the shop." });
+    }
+
+    // Delete category
+    const deletedCategory = await Prisma.category.delete({ where: { id: categoryId } });
+
     res.status(200).json({
-      message: "Category delete successfully!",
-      category: deleteCategory,
+      message: "Category deleted successfully!",
+      category: deletedCategory,
     });
   } catch (error) {
     console.error("Error in deleteCategory:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
 
 // add product to the category
 export const addProductsToCategory = async (req, res) => {
