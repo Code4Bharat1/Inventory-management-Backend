@@ -1,6 +1,6 @@
 import Prisma from "../config/db.conf.js";
 import slugify from "slugify";
-
+import { getOrderNotifications } from "../services/notificationService.js";
 //create shop
 export const createShop = async (req, res) => {
   try {
@@ -1260,49 +1260,32 @@ export const getBucketItems = async (req, res) => {
 //create order
 export const createOrder = async (req, res) => {
   try {
-    const userId = req.user.userId; // Get userId from authenticated user
+    const userId = req.user.userId;
 
-    // Find the user's bucket with items
     const bucket = await Prisma.bucket.findUnique({
       where: { userId },
       include: {
         items: {
           include: {
             product: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                quantity: true,
-              },
+              select: { id: true, name: true, price: true, quantity: true },
             },
             shop: {
-              select: {
-                id: true,
-                name: true,
-                ownerId: true, // Assuming shop has an ownerId field for notifications
-              },
+              select: { id: true, name: true, ownerId: true },
             },
           },
         },
       },
     });
 
-    // Validate bucket existence and items
     if (!bucket || bucket.items.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "Bucket is empty or does not exist." });
+      return res.status(400).json({ error: "Bucket is empty or does not exist." });
     }
 
-    // Group items by shop to handle multiple shops if needed
     const itemsByShop = bucket.items.reduce((acc, item) => {
       const shopId = item.shop.id;
       if (!acc[shopId]) {
-        acc[shopId] = {
-          shop: item.shop,
-          items: [],
-        };
+        acc[shopId] = { shop: item.shop, items: [] };
       }
       acc[shopId].items.push({
         productId: item.product.id,
@@ -1313,53 +1296,42 @@ export const createOrder = async (req, res) => {
       return acc;
     }, {});
 
-    // Validate stock availability
     for (const shopId in itemsByShop) {
-      const { items } = itemsByShop[shopId];
-      for (const item of items) {
-        const product = bucket.items.find(
-          (i) => i.product.id === item.productId
-        ).product;
+      for (const item of itemsByShop[shopId].items) {
+        const product = bucket.items.find(i => i.product.id === item.productId).product;
         if (product.quantity < item.quantity) {
           return res.status(400).json({
-            error: `Insufficient stock for product ${item.productName}. Available: ${product.quantity}, Requested: ${item.quantity}`,
+            error: `Insufficient stock for ${item.productName}. Available: ${product.quantity}, Requested: ${item.quantity}`,
           });
         }
       }
     }
 
-    // Create orders and update stock
     const orders = [];
+
     for (const shopId in itemsByShop) {
       const { items, shop } = itemsByShop[shopId];
-      const totalAmount = items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
+      const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-      // Create order for the shop
       const order = await Prisma.order.create({
         data: {
           userId,
           shopId,
           totalAmount,
-          status: "PENDING", // Initial status
+          status: "PENDING",
           orderItems: {
-            create: items.map((item) => ({
+            create: items.map(item => ({
               productId: item.productId,
               quantity: item.quantity,
               price: item.price,
             })),
           },
         },
-        include: {
-          orderItems: true,
-        },
+        include: { orderItems: true },
       });
 
       orders.push(order);
 
-      // Update product stock
       for (const item of items) {
         await Prisma.product.update({
           where: { id: item.productId },
@@ -1367,47 +1339,57 @@ export const createOrder = async (req, res) => {
         });
       }
 
-      // Send notification to shop owner (mocked)
-      // In a real app, this could use email (e.g., Nodemailer), push notifications, or an external service
-      const notification = {
-        shopOwnerId: shop.ownerId,
-        message: `New order received (Order ID: ${
-          order.id
-        }) from user ${userId} for ${
-          items.length
-        } item(s) totaling $${totalAmount.toFixed(2)}.`,
-        createdAt: new Date(),
-      };
-      // Mock: Log notification (replace with actual notification logic, e.g., save to a Notification table or send email)
-      console.log("Notification sent to shop owner:", notification);
-      // Example: await sendEmail(shop.ownerEmail, "New Order", notification.message);
+      await Prisma.orderNotification.create({
+        data: {
+          status: "PENDING",
+          message: `New order ${order.id} placed for ${items.length} item(s) totaling $${totalAmount.toFixed(2)}.`,
+          shopId: shopId,
+          orderId: order.id,
+        },
+      });
     }
 
-    // Clear the user's bucket
-    await Prisma.bucketItem.deleteMany({
-      where: { bucketId: bucket.id },
-    });
+    // Clear bucket
+    await Prisma.bucketItem.deleteMany({ where: { bucketId: bucket.id } });
+
+    // ✅ OPTIONAL: Fetch updated notifications for affected shop owners
+    const uniqueOwnerIds = [
+      ...new Set(bucket.items.map(item => item.shop.ownerId)),
+    ];
+
+    const allNotifications = [];
+    for (const ownerId of uniqueOwnerIds) {
+      const notifications = await getOrderNotifications(ownerId);
+      allNotifications.push({
+        ownerId,
+        notifications,
+      });
+    }
 
     res.status(201).json({
-      message: `Order(s) created successfully. ${orders.length} shop(s) notified.`,
-      orders: orders.map((order) => ({
+      message: `Order(s) created and notifications sent.`,
+      orders: orders.map(order => ({
         orderId: order.id,
         shopId: order.shopId,
         shopName: itemsByShop[order.shopId].shop.name,
         totalAmount: order.totalAmount,
-        items: order.orderItems.map((item) => ({
+        items: order.orderItems.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
           price: item.price,
         })),
         status: order.status,
       })),
+      updatedNotifications: allNotifications, // 🔄 Optional: Return new notifications per owner
     });
+
   } catch (error) {
     console.error("Error in createOrder:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
+
 
 // Get user order history
 export const getOrderHistory = async (req, res) => {

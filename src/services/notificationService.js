@@ -22,3 +22,39 @@ export const createLowStockNotification = async (product, shopId, recipient = nu
 
   return notification;
 };
+
+
+export const getOrderNotifications = async (ownerId) => {
+  if (!ownerId) {
+    throw new Error('Missing ownerId');
+  }
+
+  try {
+    // Find shops owned by the user
+    const shops = await prisma.shop.findMany({
+      where: { ownerId: String(ownerId) },
+      select: { id: true },
+    });
+
+    const shopIds = shops.map((shop) => shop.id);
+
+    // Fetch order notifications for those shops
+    const notifications = await prisma.orderNotification.findMany({
+      where: { shopId: { in: shopIds } },
+      include: {
+        order: {
+          include: {
+            orderItems: { include: { product: true } },
+            user: true,
+          },
+        },
+        shop: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return notifications;
+  } catch (error) {
+    throw new Error(`Error fetching notifications: ${error.message}`);
+  }
+};
