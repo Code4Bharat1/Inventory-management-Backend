@@ -215,6 +215,8 @@ export const createCategory = async (req, res) => {
 export const getAllCategories = async (req, res) => {
   try {
     const { shopId } = req.user; // Assuming shopId is directly on req.user
+    console.log(req.user);
+    console.log("Received shopId:", shopId);
 
     // Validate shopId
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {

@@ -32,7 +32,7 @@ app.use(express.json()); // Middleware to parse JSON bodies
 app.use("/api/products", productRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/store", storeRoutes);
-app.use("/api", authRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/notifications" , notificationRoutes)
 app.use("/api/notifications", orderRoutes);
 
