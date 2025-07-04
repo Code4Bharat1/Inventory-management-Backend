@@ -33,7 +33,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/store", storeRoutes);
 app.use("/api", authRoutes);
-app.use("/api" , notificationRoutes)
+app.use("/api/notifications" , notificationRoutes)
 app.use("/api/notifications", orderRoutes);
 
 // Basic test route

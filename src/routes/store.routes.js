@@ -48,6 +48,6 @@ router.delete(
 ); // remove product from bucket
 router.get("/:slug/:categoryId/bucket", authenticateJWT, getBucketItems); // get the bucket
 router.post("/:slug/:categoryId/order", authenticateJWT, createOrder); // order the products
-router.get("/:slug/:categoryId/order-history" , authenticateJWT , getOrderHistory)
+router.get("/:slug/:categoryId/order-history" , authenticateJWT , getOrderHistory) //create order
 
 export default router;

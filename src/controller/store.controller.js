@@ -510,8 +510,9 @@ export const deleteCategory = async (req, res) => {
 // add product to the category
 export const addProductsToCategory = async (req, res) => {
   try {
-    const { shopId } = req.params; // Get shopId from URL params
+    const shopId  = req.user.shopId; // Get shopId from URL params
     const { productIds, categoryId } = req.body; // Single categoryId from body
+    console.log(shopId)
 
     // Validate inputs
     if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -519,7 +520,7 @@ export const addProductsToCategory = async (req, res) => {
         error: "productIds (array) is required and must not be empty.",
       });
     }
-    if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
+    if (!shopId) {
       return res
         .status(400)
         .json({ error: "shopId is required and must be a non-empty string." });

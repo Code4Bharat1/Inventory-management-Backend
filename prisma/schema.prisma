@@ -67,6 +67,7 @@ model Shop {
   butketItems       BucketItem[]
   order             Order[]
   notification      Notification[]
+  orderNotification OrderNotification[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }

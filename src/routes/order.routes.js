@@ -1,12 +1,13 @@
 import express from 'express';
 import {
-  // getOrderNotifications,
+  getAllNotifications,
   respondToOrderNotification,
 } from '../controller/order.controller.js';
+import { authenticateJWT } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// router.get('/', getOrderNotifications); // ?ownerId=...
-router.post('/:id/respond', respondToOrderNotification); // Accept/Reject
+router.get('/', authenticateJWT , getAllNotifications); // ?ownerId=...
+router.post('/respond', respondToOrderNotification); // Accept/Reject
 
 export default router;
