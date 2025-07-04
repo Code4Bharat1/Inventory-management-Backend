@@ -506,6 +506,55 @@ export const deleteCategory = async (req, res) => {
   }
 };
 
+//get all product which are assigned to that category
+// Controller: Get all assigned products to a category
+export const getProductsByCategory = async (req, res) => {
+  try {
+    const shopId = req.user.shopId;
+    const { categoryId }  = req.body; // Take categoryId from body
+
+    if (!shopId) {
+      return res.status(400).json({ error: "shopId is required from the authenticated user." });
+    }
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+      return res.status(400).json({ error: "categoryId is required in body and must be a non-empty string." });
+    }
+
+    // Verify the category exists for this shop
+    const category = await Prisma.category.findUnique({
+      where: { id: categoryId },
+      include: { shop: true },
+    });
+    if (!category || category.shopId !== shopId) {
+      return res.status(404).json({ error: "Category not found or not associated with this shop." });
+    }
+
+    // Fetch products assigned to this category for the shop
+    const products = await Prisma.product.findMany({
+      where: {
+        shopCategoriesProducts: {
+          some: {
+            shopId: shopId,
+            categoryId: categoryId,
+          },
+        },
+      },
+      include: {
+        shopCategoriesProducts: true,
+      },
+    });
+
+    res.status(200).json({
+      message: `Found ${products.length} product(s) assigned to this category.`,
+      products,
+    });
+  } catch (error) {
+    console.error("Error in getProductsByCategory:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+
 
 // add product to the category
 export const addProductsToCategory = async (req, res) => {
