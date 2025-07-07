@@ -28,15 +28,15 @@ router.post("/createShop", createShop);
 router.post("/category", authenticateJWT, createCategory); //create a category
 router.get("/category", authenticateJWT, getAllCategories); // get all category
 router.put("/category", authenticateJWT, editCategory); // edit category
-router.delete("/category/:categoryId", authenticateJWT, deleteCategory);
-router.post("/category/product", authenticateJWT, getProductsByCategory); //get product to category
+router.delete("/category", authenticateJWT, deleteCategory);
+router.get("/category/product", authenticateJWT, getProductsByCategory); //get product to category
 router.post("/category/product", authenticateJWT, addProductsToCategory); //add product to category
 router.delete("/category/product", authenticateJWT, removeProductsFromCategory); // remove product from category
 
-router.get("/:slug", authenticateJWT, getCategoriesForShop); // get all category
-router.get("/:slug/Search", searchCategories); // get category by search
-router.get("/:slug/:categoryId", authenticateJWT, getAllProductsForShop); // get all product
-router.get("/:slug/:categoryId/Search", searchAndFilterProducts); // get product by search and filter
+// router.get("/:slug", authenticateJWT, getCategoriesForShop); // get all category
+// router.get("/:slug/Search", searchCategories); // get category by search
+// router.get("/:slug/:categoryId", authenticateJWT, getAllProductsForShop); // get all product
+// router.get("/:slug/:categoryId/Search", searchAndFilterProducts); // get product by search and filter
 router.post(
   "/:slug/:categoryId/bucket/item",
   authenticateJWT,
