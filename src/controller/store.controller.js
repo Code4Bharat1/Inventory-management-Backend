@@ -215,8 +215,6 @@ export const createCategory = async (req, res) => {
 export const getAllCategories = async (req, res) => {
   try {
     const { shopId } = req.user; // Assuming shopId is directly on req.user
-    console.log(req.user);
-    console.log("Received shopId:", shopId);
 
     // Validate shopId
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
@@ -508,224 +506,225 @@ export const deleteCategory = async (req, res) => {
   }
 };
 
+//get all product which are assigned to that category
+// Controller: Get all assigned products to a category
+export const getProductsByCategory = async (req, res) => {
+  try {
+    console.log("Called get Products")
+    const shopId = req.user.shopId;
+    const categoryId   = req.query.categoryId; // Take categoryId from body
+    console.log(categoryId)
+    if (!shopId) {
+      return res.status(400).json({ error: "shopId is required from the authenticated user." });
+    }
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+      return res.status(400).json({ error: "categoryId is required in body and must be a non-empty string." });
+    }
 
-// add product to the category
+    // Verify the category exists for this shop
+    const category = await Prisma.category.findUnique({
+      where: { id: categoryId },
+      include: { shop: true },
+    });
+    if (!category || category.shopId !== shopId) {
+      return res.status(404).json({ error: "Category not found or not associated with this shop." });
+    }
+    console.log(category)
+
+    // Fetch products assigned to this category for the shop
+    const products = await Prisma.product.findMany({
+      where: {
+        shopCategoriesProducts: {
+          some: {
+            shopId: shopId,
+            categoryId: categoryId,
+          },
+        },
+      },
+      include: {
+        shopCategoriesProducts: true,
+      },
+    });
+
+    res.status(200).json({
+      message: `Found ${products.length} product(s) assigned to this category.`,
+      products,
+    });
+  } catch (error) {
+    console.error("Error in getProductsByCategory:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+// Add a product to a category
 export const addProductsToCategory = async (req, res) => {
   try {
-    const shopId  = req.user.shopId; // Get shopId from URL params
-    const { productIds, categoryId } = req.body; // Single categoryId from body
-    console.log(shopId)
+    const shopId = req.user?.shopId;
+    const { productId, categoryId } = req.body;
+    console.log("addProductsToCategory Input:", { shopId, productId, categoryId });
 
     // Validate inputs
-    if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({
-        error: "productIds (array) is required and must not be empty.",
-      });
-    }
-    if (!shopId) {
-      return res
-        .status(400)
-        .json({ error: "shopId is required and must be a non-empty string." });
-    }
-    if (
-      !categoryId ||
-      typeof categoryId !== "string" ||
-      categoryId.trim() === ""
-    ) {
-      return res.status(400).json({
-        error: "categoryId is required and must be a non-empty string.",
-      });
-    }
-
-    // Check if the shop exists
-    const shop = await Prisma.shop.findUnique({
-      where: { id: shopId },
-    });
-    if (!shop) {
-      return res.status(404).json({ error: "Shop not found." });
-    }
-
-    // Check if the category exists and is associated with the shop
-    const category = await Prisma.category.findUnique({
-      where: { id: categoryId },
-      include: { shop: true },
-    });
-    if (!category || category.shopId !== shopId) {
-      return res
-        .status(404)
-        .json({ error: "Category not found or not associated with the shop." });
-    }
-
-    // Check all products exist
-    const products = await Prisma.product.findMany({
-      where: {
-        id: {
-          in: productIds,
-        },
-      },
-      include: {
-        shopCategoriesProducts: {
-          include: {
-            shop: true, // Include current shop relations
-            category: true, // Include current category relations
-          },
-        },
-      },
-    });
-    if (products.length !== productIds.length) {
-      return res.status(404).json({ error: "One or more products not found." });
-    }
-
-    // Add products to the category in the shop, skipping existing associations
-    let addedCount = 0;
-    const skippedAssociations = [];
-    for (const product of products) {
-      // Check if the product is already in this shop and category
-      const existingEntry = product.shopCategoriesProducts.find(
-        (pc) => pc.shopId === shop.id && pc.categoryId === categoryId
-      );
-
-      if (existingEntry) {
-        skippedAssociations.push({
-          productId: product.id,
-          shopId: shop.id,
-          categoryId,
-          reason: "Product already associated with this category in the shop.",
-        });
-        continue; // Skip adding this product to the category
-      }
-
-      // Create a new entry in the ProductCategory junction table
-      await Prisma.productCategory.create({
-        data: {
-          productId: product.id,
-          shopId: shop.id,
-          categoryId,
-        },
-      });
-      addedCount++;
-    }
-
-    res.status(200).json({
-      message: `${addedCount} product(s) added to category successfully.`,
-      updatedProducts: products.length,
-      skippedAssociations:
-        skippedAssociations.length > 0 ? skippedAssociations : undefined,
-    });
-  } catch (error) {
-    console.error("Error in addProductsToCategory:", error);
-    res.status(500).json({ error: "Internal server error." });
-  }
-};
-
-//remove product from category
-export const removeProductsFromCategory = async (req, res) => {
-  try {
-    const { shopId } = req.params; // Get shopId from URL params
-    const { productIds, categoryId } = req.body; // Single categoryId from body
-
-    // Validate inputs
-    if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({
-        error: "productIds (array) is required and must not be empty.",
-      });
+    if (!productId || typeof productId !== "string" || productId.trim() === "") {
+      return res.status(400).json({ error: "productId is required and must be a non-empty string." });
     }
     if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
-      return res
-        .status(400)
-        .json({ error: "shopId is required and must be a non-empty string." });
+      return res.status(400).json({ error: "shopId is required and must be a non-empty string." });
     }
-    if (
-      !categoryId ||
-      typeof categoryId !== "string" ||
-      categoryId.trim() === ""
-    ) {
-      return res.status(400).json({
-        error: "categoryId is required and must be a non-empty string.",
-      });
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+      return res.status(400).json({ error: "categoryId is required and must be a non-empty string." });
     }
 
-    // Check if the shop exists
-    const shop = await Prisma.shop.findUnique({
-      where: { id: shopId },
-    });
+    // Check if shop exists
+    const shop = await Prisma.shop.findUnique({ where: { id: shopId } });
+    console.log("Shop found:", shop);
     if (!shop) {
       return res.status(404).json({ error: "Shop not found." });
     }
 
-    // Check if the category exists and is associated with the shop
+    // Check if category exists and belongs to the shop
     const category = await Prisma.category.findUnique({
       where: { id: categoryId },
       include: { shop: true },
     });
+    console.log("Category found:", category);
     if (!category || category.shopId !== shopId) {
-      return res
-        .status(404)
-        .json({ error: "Category not found or not associated with the shop." });
+      return res.status(404).json({ error: "Category not found or not associated with the shop." });
     }
 
-    // Check all products exist
-    const products = await Prisma.product.findMany({
-      where: {
-        id: {
-          in: productIds,
-        },
-      },
+    // Check if product exists
+    const product = await Prisma.product.findUnique({
+      where: { id: productId },
       include: {
         shopCategoriesProducts: {
-          include: {
-            shop: true, // Include current shop relations
-            category: true, // Include current category relations
-          },
+          where: { shopId, categoryId },
         },
       },
     });
-    if (products.length !== productIds.length) {
-      return res.status(404).json({ error: "One or more products not found." });
+    console.log("Product found:", product);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found." });
     }
 
-    // Remove products from the category in the shop
-    let removedCount = 0;
-    const skippedRemovals = [];
-    for (const product of products) {
-      // Check if the product is associated with this shop and category
-      const existingEntry = product.shopCategoriesProducts.find(
-        (pc) => pc.shopId === shop.id && pc.categoryId === categoryId
-      );
+    // Check if association already exists
+    const existingEntry = product.shopCategoriesProducts.find(
+      (pc) => pc.shopId === shopId && pc.categoryId === categoryId
+    );
 
-      if (!existingEntry) {
-        skippedRemovals.push({
-          productId: product.id,
-          shopId: shop.id,
-          categoryId,
-          reason: "Product not associated with this category in the shop.",
-        });
-        continue; // Skip if no association exists
-      }
-
-      // Remove the entry from the ProductCategory junction table
-      await Prisma.productCategory.delete({
-        where: {
-          productId_shopId_categoryId: {
-            productId: product.id,
-            shopId: shop.id,
-            categoryId,
-          },
-        },
+    if (existingEntry) {
+      return res.status(200).json({
+        message: "Product is already associated with this category in the shop.",
+        productId,
+        categoryId,
       });
-      removedCount++;
     }
+
+    // Add product to the category
+    await Prisma.productCategory.create({
+      data: {
+        productId,
+        shopId,
+        categoryId,
+      },
+    });
+    console.log(`Added product ${productId} to category ${categoryId}`);
 
     res.status(200).json({
-      message: `${removedCount} product(s) removed from category successfully.`,
-      updatedProducts: products.length,
-      skippedRemovals: skippedRemovals.length > 0 ? skippedRemovals : undefined,
+      message: "Product added to category successfully.",
+      productId,
+      categoryId,
     });
   } catch (error) {
-    console.error("Error in removeProductsFromCategory:", error);
-    res.status(500).json({ error: "Internal server error." });
+    console.error("Error in addProductsToCategory:", error.message, error.stack);
+    res.status(500).json({ error: `Internal server error: ${error.message}` });
   }
 };
+
+
+// Remove a product from a category
+export const removeProductsFromCategory = async (req, res) => {
+  try {
+    const shopId = req.user?.shopId;
+    const { productId, categoryId } = req.body;
+    console.log("removeProductsFromCategory Input:", { shopId, productId, categoryId });
+
+    // Validate inputs
+    if (!productId || typeof productId !== "string" || productId.trim() === "") {
+      return res.status(400).json({ error: "productId is required and must be a non-empty string." });
+    }
+    if (!shopId || typeof shopId !== "string" || shopId.trim() === "") {
+      return res.status(400).json({ error: "shopId is required and must be a non-empty string." });
+    }
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") {
+      return res.status(400).json({ error: "categoryId is required and must be a non-empty string." });
+    }
+
+    // Check if shop exists
+    const shop = await Prisma.shop.findUnique({ where: { id: shopId } });
+    console.log("Shop found:", shop);
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found." });
+    }
+
+    // Check if category exists and is associated with the shop
+    const category = await Prisma.category.findUnique({
+      where: { id: categoryId },
+      include: { shop: true },
+    });
+    console.log("Category found:", category);
+    if (!category || category.shopId !== shopId) {
+      return res.status(404).json({ error: "Category not found or not associated with the shop." });
+    }
+
+    // Check if product exists
+    const product = await Prisma.product.findUnique({
+      where: { id: productId },
+      include: {
+        shopCategoriesProducts: {
+          where: { shopId, categoryId },
+        },
+      },
+    });
+    console.log("Product found:", product);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    // Check if association exists
+    const existingEntry = product.shopCategoriesProducts.find(
+      (pc) => pc.shopId === shopId && pc.categoryId === categoryId
+    );
+
+    if (!existingEntry) {
+      return res.status(200).json({
+        message: "Product is not associated with this category in the shop.",
+        productId,
+        categoryId,
+      });
+    }
+
+    // Remove association
+    await Prisma.productCategory.delete({
+      where: {
+        productId_shopId_categoryId: {
+          productId,
+          shopId,
+          categoryId,
+        },
+      },
+    });
+    console.log(`Removed product ${productId} from category ${categoryId}`);
+
+    res.status(200).json({
+      message: "Product removed from category successfully.",
+      productId,
+      categoryId,
+    });
+  } catch (error) {
+    console.error("Error in removeProductsFromCategory:", error.message, error.stack);
+    res.status(500).json({ error: `Internal server error: ${error.message}` });
+  }
+};
+
 
 //get all categorys
 export const getCategoriesForShop = async (req, res) => {

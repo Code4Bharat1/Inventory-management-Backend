@@ -23,23 +23,23 @@ model User {
 }
 
 model Product {
-  id                     String            @id @default(uuid())
-  name                   String
-  quantity               Int               @default(0)
-  price                  Float?
-  category               String?
-  description            String?
-  imageUrl               String?
-  note                   String?
-  minimumStock           Int?              @default(0)
-  sku                    String?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  bucketItems            BucketItem[]
-  notification           Notification[]
-  orderItems             OrderItem[]
-  shopCategoriesProducts ProductCategory[]
-  stockHistory           stockHistory[]
+  id            String        @id @default(uuid())
+  name          String
+  quantity      Int           @default(0)
+  price         Float?
+  category      String?
+  description   String?
+  imageUrl      String?
+  note          String?
+  minimumStock  Int?          @default(0)
+  notification  Notification[] @relation("ProductNotifications")
+  shopCategoriesProducts ProductCategory[] @relation("ProductToProductCategory")
+  stockHistory  stockHistory[] @relation("ProductStockHistory")
+  bucketItems   BucketItem[]   @relation("ProductBucketItems")
+  orderItems    OrderItem[]    @relation("ProductOrderItems")
+  sku           String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 model Shop {
@@ -47,13 +47,14 @@ model Shop {
   name              String              @unique
   description       String?
   logoUrl           String?
-  slug              String              @unique
+  slug              String             @unique
   ownerId           String
-  isActive          Boolean             @default(true)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  butketItems       BucketItem[]
+  owner             User               @relation("UserShops", fields: [ownerId], references: [id])
+  isActive          Boolean            @default(true)
   categories        Category[]
+  categoryRelations ProductCategory[]
+  bucketItems       BucketItem[]
+  order             Order[]
   notification      Notification[]
   order             Order[]
   orderNotification OrderNotification[]
@@ -69,43 +70,40 @@ model Bucket {
 }
 
 model BucketItem {
-  id        String  @id @default(uuid())
-  bucketId  String
-  productId String
-  shopId    String
-  quantity  Int     @default(1)
-  bucket    Bucket  @relation(fields: [bucketId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
-  shop      Shop    @relation(fields: [shopId], references: [id])
-
+  id         String     @id @default(uuid())
+  bucket     Bucket     @relation(fields: [bucketId], references: [id])
+  bucketId   String
+  product    Product    @relation("ProductBucketItems", fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  shop       Shop       @relation(fields: [shopId], references: [id])
+  shopId     String
+  quantity   Int        @default(1)
   @@unique([bucketId, productId, shopId])
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  productId String
-  message   String
-  type      String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  shopId    String
-  product   Product  @relation(fields: [productId], references: [id])
-  shop      Shop     @relation(fields: [shopId], references: [id])
-
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation("ProductNotifications", fields: [productId], references: [id], onDelete: Cascade)
+  message     String
+  type        String
+  isRead      Boolean  @default(false)
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   @@index([productId])
 }
 
 model stockHistory {
   id          String   @id @default(uuid())
   productId   String
+  product     Product  @relation("ProductStockHistory", fields: [productId], references: [id], onDelete: Cascade)
   oldQuantity Int
   newQuantity Int
   changeType  String
   note        String?
   createdAt   DateTime @default(now())
-  product     Product  @relation(fields: [productId], references: [id])
-
   @@index([productId])
 }
 
@@ -121,47 +119,46 @@ model Category {
 }
 
 model ProductCategory {
-  productId  String
-  shopId     String
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
-  product    Product  @relation(fields: [productId], references: [id])
-  shop       Shop     @relation(fields: [shopId], references: [id])
-
+  productId     String
+  shopId        String
+  categoryId    String
+  product       Product         @relation("ProductToProductCategory", fields: [productId], references: [id], onDelete: Cascade)
+  shop          Shop            @relation(fields: [shopId], references: [id])
+  category      Category        @relation(fields: [categoryId], references: [id])
   @@id([productId, shopId, categoryId])
 }
 
 model Order {
-  id                 String              @id @default(uuid())
-  userId             String
-  shopId             String
-  totalAmount        Float
-  status             String
-  createdAt          DateTime            @default(now())
-  shop               Shop                @relation(fields: [shopId], references: [id])
-  user               User                @relation(fields: [userId], references: [id])
-  orderItems         OrderItem[]
+  id          String       @id @default(uuid())
+  userId      String
+  shopId      String
+  totalAmount Float
+  status      String
+  user        User         @relation(fields: [userId], references: [id])
+  shop        Shop         @relation(fields: [shopId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime     @default(now())
   orderNotifications OrderNotification[]
 }
 
 model OrderItem {
   id        String  @id @default(uuid())
   orderId   String
-  productId String
+  productId String?
   quantity  Int
   price     Float
-  order     Order   @relation(fields: [orderId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product? @relation("ProductOrderItems", fields: [productId], references: [id], onDelete: SetNull)
 }
 
 model OrderNotification {
-  id        String   @id @default(uuid())
-  status    String   @default("PENDING")
-  message   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  shopId    String
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id])
-  shop      Shop     @relation(fields: [shopId], references: [id])
+  id         String   @id @default(uuid())
+  status     String   @default("PENDING")
+  message    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
 }
