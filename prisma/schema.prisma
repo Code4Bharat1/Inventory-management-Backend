@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,159 +17,151 @@ model User {
   role      String   @default("customer")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   bucket    Bucket?
   orders    Order[]
-
-  // One-to-many: A user can own multiple shops
   shops     Shop[]   @relation("UserShops")
 }
 
-
 model Product {
-  id            String        @id @default(uuid())
-  name          String
-  quantity      Int           @default(0)
-  price         Float?
-  category      String?
-  description   String?
-  imageUrl      String?
-  note          String?
-  minimumStock  Int?          @default(0)
-  notification Notification[]
-  shopCategoriesProducts ProductCategory[] // Relation to explicit table
-  stockHistory  stockHistory[] // Relation to stock history
-  bucketItems  BucketItem[] // Relation to bucket items
-  orderItems   OrderItem[] //relation to order items
-  sku          String?
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                     String            @id @default(uuid())
+  name                   String
+  quantity               Int               @default(0)
+  price                  Float?
+  category               String?
+  description            String?
+  imageUrl               String?
+  note                   String?
+  minimumStock           Int?              @default(0)
+  sku                    String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  bucketItems            BucketItem[]
+  notification           Notification[]
+  orderItems             OrderItem[]
+  shopCategoriesProducts ProductCategory[]
+  stockHistory           stockHistory[]
 }
 
 model Shop {
-  id                String             @id @default(uuid())
-  name              String             @unique
+  id                String              @id @default(uuid())
+  name              String              @unique
   description       String?
   logoUrl           String?
-  slug              String             @unique
-  ownerId           String             // Required for ownership link
-  owner             User               @relation("UserShops", fields: [ownerId], references: [id])
-  isActive          Boolean            @default(true)
-  categories        Category[]
-  categoryRelations ProductCategory[]
+  slug              String              @unique
+  ownerId           String
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   butketItems       BucketItem[]
-  order             Order[]
+  categories        Category[]
   notification      Notification[]
+  order             Order[]
   orderNotification OrderNotification[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  categoryRelations ProductCategory[]
+  owner             User                @relation("UserShops", fields: [ownerId], references: [id])
 }
 
 model Bucket {
-  id     String        @id @default(uuid())
-  user   User          @relation(fields: [userId], references: [id])
-  userId String        @unique
+  id     String       @id @default(uuid())
+  userId String       @unique
+  user   User         @relation(fields: [userId], references: [id])
   items  BucketItem[]
 }
 
 model BucketItem {
-  id         String     @id @default(uuid())
-  bucket     Bucket     @relation(fields: [bucketId], references: [id])
-  bucketId   String
+  id        String  @id @default(uuid())
+  bucketId  String
+  productId String
+  shopId    String
+  quantity  Int     @default(1)
+  bucket    Bucket  @relation(fields: [bucketId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  shop      Shop    @relation(fields: [shopId], references: [id])
 
-  product    Product    @relation(fields: [productId], references: [id])
-  productId  String
-
-  shop       Shop       @relation(fields: [shopId], references: [id])
-  shopId     String
-
-  quantity   Int        @default(1)
-
-  @@unique([bucketId, productId, shopId]) // Each product-shop pair only once per bucket
+  @@unique([bucketId, productId, shopId])
 }
-
 
 model Notification {
-  id          String   @id @default(uuid())
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id])
-  message     String
-  type        String
-  isRead      Boolean  @default(false)
+  id        String   @id @default(uuid())
+  productId String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   shopId    String
+  product   Product  @relation(fields: [productId], references: [id])
   shop      Shop     @relation(fields: [shopId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
   @@index([productId])
 }
+
 model stockHistory {
   id          String   @id @default(uuid())
   productId   String
-  product     Product  @relation(fields: [productId], references: [id])
   oldQuantity Int
   newQuantity Int
-  changeType  String   // e.g., "IN", "OUT", "ADJUSTMENT"
+  changeType  String
   note        String?
   createdAt   DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id])
 
-  @@index([productId]) // Index for faster lookups by product
+  @@index([productId])
 }
 
 model Category {
-  id            String          @id @default(uuid())
-  name          String
-  description   String?
-  imageUrl      String?
-  shopId        String
-  slug          String
-  shop          Shop            @relation(fields: [shopId], references: [id])
-  products      ProductCategory[]
+  id          String            @id @default(uuid())
+  name        String
+  description String?
+  imageUrl    String?
+  shopId      String
+  slug        String
+  shop        Shop              @relation(fields: [shopId], references: [id])
+  products    ProductCategory[]
 }
 
 model ProductCategory {
-  productId     String
-  shopId        String
-  categoryId    String
-  product       Product         @relation(fields: [productId], references: [id])
-  shop          Shop            @relation(fields: [shopId], references: [id])
-  category      Category        @relation(fields: [categoryId], references: [id])
+  productId  String
+  shopId     String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+  shop       Shop     @relation(fields: [shopId], references: [id])
+
   @@id([productId, shopId, categoryId])
 }
 
 model Order {
-  id          String       @id @default(uuid())
-  userId      String
-  shopId      String
-  totalAmount Float
-  status      String
-  user        User         @relation(fields: [userId], references: [id])
-  shop        Shop         @relation(fields: [shopId], references: [id])
-  orderItems  OrderItem[]
-  createdAt   DateTime     @default(now())
-  orderNotifications OrderNotification[] 
+  id                 String              @id @default(uuid())
+  userId             String
+  shopId             String
+  totalAmount        Float
+  status             String
+  createdAt          DateTime            @default(now())
+  shop               Shop                @relation(fields: [shopId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
+  orderItems         OrderItem[]
+  orderNotifications OrderNotification[]
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   orderId   String
   productId String
   quantity  Int
   price     Float
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 model OrderNotification {
-  id         String   @id @default(uuid())
-  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
-  message    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  shopId     String
-  shop       Shop     @relation(fields: [shopId], references: [id])
-
-  orderId    String
-  order      Order    @relation(fields: [orderId], references: [id])
+  id        String   @id @default(uuid())
+  status    String   @default("PENDING")
+  message   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shopId    String
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  shop      Shop     @relation(fields: [shopId], references: [id])
 }
