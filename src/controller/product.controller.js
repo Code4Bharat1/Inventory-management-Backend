@@ -240,6 +240,7 @@ export const getProductById = async (req, res) => {
   }
 };
 
+
 export const updateProduct = async (req, res) => {
   try {
     const id = req.params.id;
@@ -252,7 +253,13 @@ export const updateProduct = async (req, res) => {
       note,
       minimumStock,
       sku,
+      
     } = req.body;
+    const shopId="c983229a-f7b9-4f27-9137-a2f43c0793ea";
+    console.log
+       if (!shopId) {
+      return res.status(403).json({ error: "Unauthorized. Shop ID not found." });
+    }
 
     const updatedProduct = await Prisma.product.update({
       where: { id },
@@ -268,12 +275,55 @@ export const updateProduct = async (req, res) => {
         updatedAt: new Date(),
       },
     });
+     if (updatedProduct.quantity <= updatedProduct.minimumStock) {
+      await createLowStockNotification(updatedProduct, shopId);
+    }
+    
 
     res.json(updatedProduct);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
+// export const updateProduct = async (req, res) => {
+//   try {
+//     const id = req.params.id;
+//     const {
+//       name,
+//       category,
+//       quantity,
+//       price,
+//       description,
+//       note,
+//       minimumStock,
+//       sku,
+//     } = req.body;
+
+//     const updatedProduct = await Prisma.product.update({
+//       where: { id },
+//       data: {
+//         name,
+//         category,
+//         quantity: parseInt(quantity),
+//         price: parseFloat(price),
+//         description,
+//         note,
+//         minimumStock: parseInt(minimumStock),
+//         sku,
+//         updatedAt: new Date(),
+//       },
+//     });
+
+//     // Check if new quantity is less than updated minimumStock
+//     if (updatedProduct.quantity < updatedProduct.minimumStock) {
+//       await createLowStockNotification(updatedProduct, req.user.shopId);
+//     }
+
+//     res.json(updatedProduct);
+//   } catch (error) {
+//     res.status(400).json({ error: error.message });
+//   }
+// };
 
 export const deleteProduct = async (req, res) => {
   try {
@@ -333,3 +383,6 @@ export const updateProductQuantity = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+
+

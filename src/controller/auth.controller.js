@@ -4,6 +4,7 @@ import Prisma from "../config/db.conf.js";
 import slugify from "slugify";
 
 // Create a new user account
+//user signup
 export const createAccount = async (req, res) => {
   const { email, password, name, phone, address, role } = req.body;
 
@@ -172,7 +173,7 @@ export const admincreateAccount = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Validate role if provided
-    const validRoles = ['customer', 'shop_owner']; // Match schema case
+    const validRoles = ['customer', 'Admin']; // Match schema case
     const userRole =
       role && validRoles.includes(role.toLowerCase())
         ? role.toLowerCase()

@@ -34,7 +34,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/store", storeRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/notifications" , notificationRoutes)
-app.use("/api/notifications", orderRoutes);
+app.use("/api/order", orderRoutes);
 
 // Basic test route
 app.get('/', (req, res) => {
